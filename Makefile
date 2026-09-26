@@ -5,7 +5,7 @@ COMPOSE := docker compose -f $(ROOT)/compose.yaml
 RUN := $(COMPOSE) run --rm app
 DATA := $(ROOT)/data
 
-.PHONY: help build export smoke-export summary test
+.PHONY: help build export smoke-export summary auth match rematch report accept test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -24,6 +24,22 @@ smoke-export: export ## Export the real library and check it is complete and con
 
 summary: ## Print the snapshot as a folder tree with counts
 	$(RUN) summary
+
+auth: ## Log in to Spotify; the redirect comes back to http://127.0.0.1:8888/callback
+	$(COMPOSE) run --rm --service-ports app auth
+
+match: ## Find every library track on Spotify and write reports/ (cached, resumable)
+	$(RUN) match
+
+rematch: ## Re-score from cached searches only, without calling Spotify
+	$(RUN) match --offline
+
+report: ## Rewrite reports/ from the saved matches
+	$(RUN) report
+
+accept: ## Apply accept/spotify columns from reports/*.csv as overrides, then match again
+	$(RUN) accept
+	$(RUN) match
 
 test: build ## Run the unit and end-to-end tests in Docker
 	$(COMPOSE) run --rm --entrypoint python app -m unittest discover -s tests -t . -v

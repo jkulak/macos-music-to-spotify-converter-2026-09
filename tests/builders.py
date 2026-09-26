@@ -74,3 +74,20 @@ def snapshot(tracks: list[dict], playlists: list[dict] = (), warnings: list[str]
         "playlists": ordered,
         "warnings": list(warnings),
     }
+
+
+def library_track(**fields):
+    """A parsed Track, as the matcher sees it."""
+    from music2spotify.library import parse_library
+
+    return next(iter(parse_library(snapshot([track(**fields)])).tracks.values()))
+
+
+def candidate(name: str, artists: list[str], duration: float = 201.5, album: str = "Harbour Lights",
+              album_type: str = "album", id: str | None = None):
+    from music2spotify.matching import Candidate
+
+    track_id = id or f"{next(_ids):022d}"
+    return Candidate(uri=f"spotify:track:{track_id}", name=name, artists=tuple(artists),
+                     album=album, album_type=album_type, release_date="2009-01-01",
+                     duration_ms=int(duration * 1000))

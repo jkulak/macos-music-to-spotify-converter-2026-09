@@ -13,3 +13,13 @@ scheme and releases are occasional snapshots rather than a product line.
 - `make summary` and `make smoke-export` print the snapshot as a folder tree and check it is
   consistent; voice memos, radio streams, documents, audiobooks, learning material and ringtones
   are classified as non-music.
+- `make auth` logs in to Spotify with Authorization Code + PKCE (no client secret) through a
+  loopback redirect, and keeps a refreshable token under `data/`.
+- `make match` finds every track on Spotify, only accepting the same version: remasters, radio
+  edits, explicit/clean releases and "original mix" count as the same; remixes, bootlegs, live,
+  acoustic, instrumental and acapella takes do not and are only proposed. Titles with
+  "Artist - Title", featured artists, Camelot keys or track numbers typed in are read several ways.
+  Searches are cached and paced, 429 responses honoured, and a long ban stops the run cleanly.
+- Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
+  `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
+  `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

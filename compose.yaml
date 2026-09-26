@@ -8,6 +8,7 @@ services:
     environment:
       DATA_DIR: /app/data
       REPORTS_DIR: /app/reports
+      AUTH_LISTEN_HOST: 0.0.0.0
     volumes:
       - ./:/app
     # Published only with `docker compose run --service-ports` (make auth), for

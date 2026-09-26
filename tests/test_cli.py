@@ -49,3 +49,68 @@ class CommandLineTest(unittest.TestCase):
         code, _, err = self.run_cli(None, "summary")
         self.assertEqual(code, 2)
         self.assertIn("make export", err)
+
+
+class MatchCommandTest(unittest.TestCase):
+    """The match command end to end, against the fake Spotify."""
+
+    def setUp(self):
+        from tests.fake_spotify import FakeSpotify
+
+        self.fake = FakeSpotify()
+        self.base = self.fake.start()
+        self.addCleanup(self.fake.stop)
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.env = {"DATA_DIR": f"{self.tmp.name}/data", "REPORTS_DIR": f"{self.tmp.name}/reports",
+                    "SPOTIFY_CLIENT_ID": "cid", "SPOTIFY_API_BASE": f"{self.base}/v1",
+                    "SPOTIFY_ACCOUNTS_BASE": self.base, "SPOTIFY_MIN_INTERVAL": "0"}
+        Path(self.env["DATA_DIR"]).mkdir()
+        Path(self.env["DATA_DIR"], "spotify-token.json").write_text(json.dumps(
+            {"access_token": "access-1", "refresh_token": "refresh-1", "expires_at": 4102444800}))
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.dict("os.environ", self.env), redirect_stdout(out), redirect_stderr(err):
+            code = main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def test_match_finds_tracks_writes_reports_and_a_rerun_uses_the_cache(self):
+        self.fake.add_track("Paper Lanterns", ["The Quiet Engines"], duration_ms=201_500)
+        found, lost = track(name="Paper Lanterns"), track(name="Unreleased Demo Tape", artist="Nobody")
+        Path(self.env["DATA_DIR"], "library.json").write_text(
+            json.dumps(snapshot([found, lost], [playlist("Mix", tracks=[found, lost])])))
+
+        code, out, err = self.run_cli("match")
+        self.assertEqual(code, 0, err)
+        self.assertIn("2 tracks: 1 matched, 1 not_found", out)
+        reports = Path(self.env["REPORTS_DIR"])
+        self.assertTrue((reports / "report.md").exists())
+        self.assertIn("Unreleased Demo Tape", (reports / "not-found.csv").read_text(encoding="utf-8-sig"))
+
+        searches = len(self.fake.calls("GET", "/v1/search"))
+        code, _, _ = self.run_cli("match")
+        self.assertEqual(len(self.fake.calls("GET", "/v1/search")), searches)
+
+    def test_accept_turns_a_hand_found_link_into_an_override_used_by_the_next_match(self):
+        spotify_track = self.fake.add_track("Lost Session", ["Nobody"])
+        lost = track(name="Demo Tape", artist="Nobody")
+        Path(self.env["DATA_DIR"], "library.json").write_text(json.dumps(snapshot([lost])))
+        self.run_cli("match")
+        not_found = Path(self.env["REPORTS_DIR"], "not-found.csv")
+        text = not_found.read_text(encoding="utf-8-sig").replace(
+            "\n,", f"\nhttps://open.spotify.com/track/{spotify_track['id']},", 1)
+        not_found.write_text(text, encoding="utf-8-sig")
+
+        code, out, _ = self.run_cli("accept")
+        self.assertEqual(code, 0)
+        self.assertIn("1 decisions saved", out)
+        code, out, _ = self.run_cli("match")
+        self.assertIn("1 tracks: 1 matched", out)
+
+    def test_match_without_a_client_id_explains_the_setup(self):
+        self.env["SPOTIFY_CLIENT_ID"] = ""
+        Path(self.env["DATA_DIR"], "library.json").write_text(json.dumps(snapshot([track()])))
+        code, _, err = self.run_cli("match")
+        self.assertEqual(code, 2)
+        self.assertIn("SPOTIFY_CLIENT_ID is not set", err)
