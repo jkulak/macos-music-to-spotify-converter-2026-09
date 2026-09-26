@@ -50,6 +50,24 @@ make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 accept
 Decisions end up in `data/overrides.csv` (`track_id,spotify,note`; `spotify` is a track link,
 `skip` or `none`), which can also be edited by hand.
 
+Then create the playlists:
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 plan
+```
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 sync
+```
+
+The Web API cannot create folders, so playlists are named with their folder path
+(`Added / 2013 / 2013-04 Trap Dubstep`). `reports/plan.md` lists the folders to create in Spotify and
+what goes into each. Once everything sits in its folder, drop the prefixes:
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 sync PLAYLIST_NAMES=plain
+```
+
 `make help` lists every target.
 
 ## Tests

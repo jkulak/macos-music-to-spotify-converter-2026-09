@@ -20,6 +20,8 @@ class Settings:
     min_interval: float
     max_retry_wait: int
     market: str
+    name_style: str
+    root_folder: str
 
     @property
     def library_path(self) -> Path:
@@ -41,6 +43,10 @@ class Settings:
     def overrides_path(self) -> Path:
         return self.data_dir / "overrides.csv"
 
+    @property
+    def state_path(self) -> Path:
+        return self.data_dir / "spotify-state.json"
+
 
 def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
     return Settings(
@@ -58,4 +64,7 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         # An explicit country: market=from_token needs the user-read-private scope,
         # and naming it also makes Spotify say which tracks can be played there.
         market=env.get("SPOTIFY_MARKET", "PL"),
+        # "path" until the playlists sit in their Spotify folders, then "plain".
+        name_style=env.get("PLAYLIST_NAMES", "path"),
+        root_folder=env.get("ROOT_FOLDER", "mp3-collection"),
     )

@@ -114,3 +114,29 @@ class MatchCommandTest(unittest.TestCase):
         code, _, err = self.run_cli("match")
         self.assertEqual(code, 2)
         self.assertIn("SPOTIFY_CLIENT_ID is not set", err)
+
+    def test_plan_then_sync_create_the_playlists_and_write_the_checklist(self):
+        self.fake.add_track("Paper Lanterns", ["The Quiet Engines"], duration_ms=201_500)
+        song = track(name="Paper Lanterns")
+        Path(self.env["DATA_DIR"], "library.json").write_text(json.dumps(
+            snapshot([song], [playlist("Best", kind="folder", id="F1"),
+                              playlist("Top", kind="smart", parent="F1", tracks=[song])])))
+        self.run_cli("match")
+
+        code, out, _ = self.run_cli("plan")
+        self.assertEqual(code, 0)
+        self.assertIn("2 playlists in 1 folders", out)
+        self.assertEqual(self.fake.playlists, {})
+
+        code, out, err = self.run_cli("sync")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(sorted(p["name"] for p in self.fake.playlists.values()), ["All songs", "Best / Top"])
+        checklist = Path(self.env["REPORTS_DIR"], "plan.md").read_text(encoding="utf-8")
+        self.assertIn("`Best / Top` — 1 of 1", checklist)
+        self.assertIn("| Best / Top | 1 | 1 | 0 | created |", checklist)
+
+    def test_plan_refuses_to_run_before_every_track_is_matched(self):
+        Path(self.env["DATA_DIR"], "library.json").write_text(json.dumps(snapshot([track()])))
+        code, _, err = self.run_cli("plan")
+        self.assertEqual(code, 2)
+        self.assertIn("does not exist; run `make match` first", err)

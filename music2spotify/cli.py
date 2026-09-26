@@ -22,8 +22,10 @@ from .pipeline import (
     save_matches,
     save_overrides,
 )
+from .plan import NAME_STYLES, build_plan, folder_count, render_plan
 from .reports import read_decisions, write_reports
 from .spotify import RateLimited, SpotifyClient, SpotifyError, TokenStore
+from .sync import SyncState, sync
 
 
 class UsageError(Exception):
@@ -169,6 +171,55 @@ def accept(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _plan(settings: Settings):
+    if settings.name_style not in NAME_STYLES:
+        raise UsageError(f"PLAYLIST_NAMES must be one of {', '.join(NAME_STYLES)}")
+    library = load_library(settings.library_path)
+    results = load_matches(settings.matches_path)
+    unmatched = [t for t in library.tracks if t not in results]
+    if unmatched:
+        raise UsageError(f"{len(unmatched)} library tracks have not been matched; run `make match`")
+    return build_plan(library, results, library.exported_at[:10])
+
+
+def plan(settings: Settings, args: argparse.Namespace) -> int:
+    planned = _plan(settings)
+    state = SyncState(settings.state_path)
+    actions = {k: "synced before" for k in state.playlists}
+    path = settings.reports_dir / "plan.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_plan(planned, settings.name_style, settings.root_folder, actions),
+                    encoding="utf-8")
+    new = sum(1 for p in planned if p.key not in state.playlists)
+    print(f"{len(planned)} playlists in {folder_count(planned)} folders, "
+          f"{sum(len(p.uris) for p in planned)} tracks in total; "
+          f"{new} would be created, {len(planned) - new} updated if changed")
+    print(f"Layout and checklist: {path}")
+    return 0
+
+
+def push(settings: Settings, args: argparse.Namespace) -> int:
+    planned = _plan(settings)
+    state = SyncState(settings.state_path)
+
+    def show(name: str, action: str) -> None:
+        print(f"{action:>14}  {name}", flush=True)
+
+    try:
+        actions = sync(planned, _client(settings), state, settings.name_style, show)
+    except RateLimited as error:
+        print(f"stopped: {error}", file=sys.stderr)
+        return 3
+    path = settings.reports_dir / "plan.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_plan(planned, settings.name_style, settings.root_folder, actions),
+                    encoding="utf-8")
+    print(f"\n{len(actions)} playlists synced: "
+          + ", ".join(f"{n} {a}" for a, n in Counter(actions.values()).most_common()))
+    print(f"Layout and checklist: {path}")
+    return 0
+
+
 COMMANDS = {
     "summary": (summary, "print the library snapshot as a folder tree with counts"),
     "validate": (validate, "check the snapshot is complete and consistent"),
@@ -176,6 +227,8 @@ COMMANDS = {
     "match": (match, "find every library track on Spotify and write the reports"),
     "report": (report, "rewrite the reports from the saved matches"),
     "accept": (accept, "move decisions from review.csv and not-found.csv into overrides"),
+    "plan": (plan, "write reports/plan.md: the playlists and folders sync would produce"),
+    "sync": (push, "create or update the playlists in Spotify"),
 }
 
 

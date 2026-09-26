@@ -3,9 +3,11 @@
 ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 COMPOSE := docker compose -f $(ROOT)/compose.yaml
 RUN := $(COMPOSE) run --rm app
+# `make sync PLAYLIST_NAMES=plain` overrides the value from .env for one run.
+NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help build export smoke-export summary auth match rematch report accept test
+.PHONY: help build export smoke-export summary auth match rematch report accept plan sync test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -40,6 +42,12 @@ report: ## Rewrite reports/ from the saved matches
 accept: ## Apply accept/spotify columns from reports/*.csv as overrides, then match again
 	$(RUN) accept
 	$(RUN) match
+
+plan: ## Write reports/plan.md: playlists and folders a sync would produce (no writes)
+	$(COMPOSE) run --rm $(NAMES) app plan
+
+sync: ## Create or update the playlists in Spotify (PLAYLIST_NAMES=plain once in folders)
+	$(COMPOSE) run --rm $(NAMES) app sync
 
 test: build ## Run the unit and end-to-end tests in Docker
 	$(COMPOSE) run --rm --entrypoint python app -m unittest discover -s tests -t . -v
