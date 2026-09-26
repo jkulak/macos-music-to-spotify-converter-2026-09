@@ -26,17 +26,27 @@ class SpotifyError(Exception):
 
 
 class RateLimited(SpotifyError):
-    def __init__(self, retry_after: int):
+    def __init__(self, retry_after: int, reason: str = ""):
         self.retry_after = retry_after
+        self.reason = reason
         hours = retry_after / 3600
+        why = f" ({reason})" if reason else ""
         super().__init__(
-            f"Spotify asks to wait {retry_after}s (~{hours:.1f}h) before the next request; "
+            f"Spotify asks to wait {retry_after}s (~{hours:.1f}h) before the next request{why}; "
             "everything fetched so far is cached, run the same command again later"
         )
 
 
 class NotAuthorised(SpotifyError):
     pass
+
+
+def _reason(detail: str) -> str:
+    """The "reason" of a Spotify error body, e.g. QUOTA_EXCEEDED."""
+    try:
+        return json.loads(detail).get("error", {}).get("reason") or ""
+    except (ValueError, AttributeError):
+        return ""
 
 
 def _post_form(url: str, fields: dict) -> dict:
@@ -153,7 +163,7 @@ class SpotifyClient:
                     continue
                 if status == 429:
                     if retry_after > self.max_retry_wait:
-                        raise RateLimited(retry_after) from None
+                        raise RateLimited(retry_after, _reason(detail)) from None
                     self.sleep(retry_after + 1)
                     continue
                 if status >= 500:
@@ -174,6 +184,23 @@ class SpotifyClient:
             "q": query, "type": "track", "limit": limit, "market": self.market,
         })
         return ((result or {}).get("tracks") or {}).get("items") or []
+
+    def search_albums(self, query: str, limit: int = SEARCH_LIMIT) -> list[dict]:
+        result = self.request("GET", "/search", {
+            "q": query, "type": "album", "limit": limit, "market": self.market,
+        })
+        return ((result or {}).get("albums") or {}).get("items") or []
+
+    def album_tracks(self, album_id: str) -> list[dict]:
+        """An album's track list. Not a search, so it does not use the search quota."""
+        tracks, offset = [], 0
+        while True:
+            page = self.request("GET", f"/albums/{album_id}/tracks",
+                                {"limit": 50, "offset": offset, "market": self.market})
+            tracks += page.get("items") or []
+            if not page.get("next"):
+                return tracks
+            offset += 50
 
     def track(self, track_id: str) -> dict:
         return self.request("GET", f"/tracks/{track_id}", {"market": self.market})

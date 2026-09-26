@@ -33,6 +33,7 @@ class FakeSpotify:
     access_token: str = "access-1"
     refresh_token: str = "refresh-1"
     user_id: str = "tester"
+    search_quota: int | None = None  # searches left before QUOTA_EXCEEDED
 
     def __post_init__(self):
         self._ids = itertools.count(1)
@@ -45,10 +46,12 @@ class FakeSpotify:
                   duration_ms: int = 200_000, album_type: str = "album",
                   playable: bool = True) -> dict:
         track_id = f"{next(self._ids):022d}"
+        album_id = "al" + fold(album + artists[0]).replace(" ", "")[:20]
         track = {
             "id": track_id, "uri": f"spotify:track:{track_id}", "name": name,
             "artists": [{"name": a} for a in artists],
-            "album": {"name": album, "album_type": album_type, "release_date": "2010-01-01"},
+            "album": {"id": album_id, "name": album, "album_type": album_type,
+                      "release_date": "2010-01-01", "artists": [{"name": artists[0]}]},
             "duration_ms": duration_ms, "external_ids": {"isrc": f"XX{track_id[-10:]}"},
             "is_playable": playable,
         }
@@ -100,7 +103,8 @@ class FakeSpotify:
                 if self.headers.get("Authorization") != f"Bearer {fake.access_token}":
                     return self._send(401, {"error": {"status": 401, "message": "expired"}})
                 status, payload = fake._route(method, url.path, query, body)
-                self._send(status, payload)
+                headers = {"Retry-After": 86_000} if status == 429 else None
+                self._send(status, payload, headers)
 
             def do_GET(self):  # noqa: N802
                 self._handle("GET")
@@ -139,6 +143,17 @@ class FakeSpotify:
                 hits.append(track)
         return hits
 
+    def _search_albums(self, q: str) -> list[dict]:
+        words = fold(q.replace("album:", " ").replace("artist:", " ")).split()
+        albums = {}
+        for track in self.catalogue.values():
+            album = track["album"]
+            haystack = fold(album["name"] + " " + album["artists"][0]["name"]).split()
+            if all(w in haystack for w in words):
+                total = sum(1 for t in self.catalogue.values() if t["album"]["id"] == album["id"])
+                albums[album["id"]] = {**album, "total_tracks": total}
+        return list(albums.values())
+
     def _route(self, method: str, path: str, query: dict, body):
         parts = path.strip("/").split("/")[1:]  # drop "v1"
         if parts == ["search"]:
@@ -148,7 +163,19 @@ class FakeSpotify:
             limit = int(query.get("limit", 5))
             if limit > 10:
                 return 400, {"error": {"status": 400, "message": "Invalid limit"}}
+            if self.search_quota is not None:
+                if self.search_quota <= 0:
+                    self._quota_block = True
+                    return 429, {"error": {"status": 429, "message": "Too many requests",
+                                           "reason": "QUOTA_EXCEEDED"}}
+                self.search_quota -= 1
+            if query.get("type") == "album":
+                return 200, {"albums": {"items": self._search_albums(query["q"])[:limit]}}
             return 200, {"tracks": {"items": self._search(query["q"])[:limit]}}
+        if parts[:1] == ["albums"] and parts[2:] == ["tracks"]:
+            listing = [dict((k, v) for k, v in t.items() if k != "album")
+                       for t in self.catalogue.values() if t["album"]["id"] == parts[1]]
+            return 200, {"items": listing, "next": None}
         if parts[:1] == ["tracks"] and len(parts) == 2:
             track = self.catalogue.get(parts[1])
             return (200, track) if track else (404, {"error": {"status": 404}})

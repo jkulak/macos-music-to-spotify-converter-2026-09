@@ -31,7 +31,7 @@ SKIPPED = "skipped"
 RANK = {MATCHED: 3, UNCERTAIN: 2, ALTERNATIVE: 1, NOT_FOUND: 0}
 
 # Artist fields that say nothing about who made the track.
-_NO_ARTIST = {"", "various artists", "various", "unknown artist", "unknown", "va"}
+NO_ARTIST = {"", "various artists", "various", "unknown artist", "unknown", "va"}
 _LEADING_NUMBER = re.compile(r"^\d{1,2}(?:[ ._]+|\s*-\s*)(?=\D)")
 
 
@@ -48,6 +48,7 @@ class Candidate:
     duration_ms: int
     isrc: str = ""
     playable: bool = True  # in the configured market
+    album_id: str = ""
 
     @property
     def id(self) -> str:
@@ -78,6 +79,22 @@ class Candidate:
             duration_ms=item.get("duration_ms") or 0,
             isrc=(item.get("external_ids") or {}).get("isrc") or "",
             playable=item.get("is_playable", True) is not False,
+            album_id=album.get("id") or "",
+        )
+
+    @classmethod
+    def from_album_track(cls, item: dict, album) -> Candidate:
+        """A track from an album's track list, which carries no album of its own."""
+        return cls(
+            uri=item["uri"],
+            name=item.get("name") or "",
+            artists=tuple(a.get("name") or "" for a in item.get("artists") or []),
+            album=album.name,
+            album_type=album.album_type,
+            release_date=album.release_date,
+            duration_ms=item.get("duration_ms") or 0,
+            playable=item.get("is_playable", True) is not False,
+            album_id=album.id,
         )
 
     def to_dict(self) -> dict:
@@ -104,7 +121,7 @@ class Reading:
 
 def _artists_of(text: str) -> tuple[tuple[str, ...], str]:
     folded = fold(text)
-    if folded in _NO_ARTIST:
+    if folded in NO_ARTIST:
         return (), ""
     return tuple(split_artists(text)), folded
 

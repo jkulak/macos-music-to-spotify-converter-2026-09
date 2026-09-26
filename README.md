@@ -36,9 +36,18 @@ make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 auth
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match
 ```
 
-`match` searches for every track (roughly an hour for 6,000 tracks at the default pace) and writes
-`reports/report.md`, `reports/not-found.csv`, `reports/review.csv` and `reports/skipped.csv`.
-Interrupting it loses nothing: searches are cached in `data/spotify-cache.jsonl`.
+`match` writes `reports/report.md`, `reports/not-found.csv`, `reports/review.csv` and
+`reports/skipped.csv`. Interrupting it loses nothing: answers are cached in
+`data/spotify-cache.jsonl`.
+
+Development-mode apps get roughly 700 searches a day. Matching therefore goes album by album
+(album track lists do not count as searches) and spreads single-track searches so every track gets
+one before any gets two. When the quota runs out, `match` saves what it has and exits with code 3;
+this keeps going by itself until everything has been searched (the Mac has to stay awake):
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match-until-done
+```
 
 To correct the result, mark rows in `reports/review.csv` with `y` or `n` in `accept`, or paste a
 Spotify link into the `spotify` column of `reports/not-found.csv`, then:

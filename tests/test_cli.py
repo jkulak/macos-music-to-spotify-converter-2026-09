@@ -141,3 +141,25 @@ class MatchCommandTest(unittest.TestCase):
         code, _, err = self.run_cli("plan")
         self.assertEqual(code, 2)
         self.assertIn("does not exist; run `make match` first", err)
+
+    def test_a_used_up_search_quota_saves_what_was_found_and_the_next_run_finishes(self):
+        for name in ("Paper Lanterns", "Harbour", "Low Tide"):
+            self.fake.add_track(name, ["The Quiet Engines"], album="Harbour Lights", duration_ms=201_500)
+        self.fake.add_track("Night Drive", ["Kilo"], album="Single", duration_ms=201_500)
+        songs = [track(name=n, album="Harbour Lights") for n in ("Paper Lanterns", "Harbour", "Low Tide")]
+        loner = track(name="Night Drive", artist="Kilo", album="")
+        Path(self.env["DATA_DIR"], "library.json").write_text(json.dumps(snapshot([*songs, loner])))
+
+        self.fake.search_quota = 1  # enough for the album search only
+        code, out, err = self.run_cli("match")
+        self.assertEqual(code, 3)
+        self.assertIn("4 tracks: 3 matched, 1 not_found", out)
+        self.assertIn("QUOTA_EXCEEDED", err)
+        self.assertIn("1 tracks still have searches to run", err)
+        self.assertEqual(Path(self.env["DATA_DIR"], "retry-after-seconds").read_text(), "86000")
+
+        self.fake.search_quota = None
+        code, out, _ = self.run_cli("match")
+        self.assertEqual(code, 0)
+        self.assertIn("4 tracks: 4 matched", out)
+        self.assertFalse(Path(self.env["DATA_DIR"], "retry-after-seconds").exists())
