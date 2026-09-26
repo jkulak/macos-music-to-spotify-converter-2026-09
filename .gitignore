@@ -1,0 +1,16 @@
+# Local tooling and session artefacts
+.claude/
+.DS_Store
+
+# Working notes, not repo content
+tasks/
+
+# Personal data: library snapshots, tokens, caches, reports
+data/
+reports/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.coverage

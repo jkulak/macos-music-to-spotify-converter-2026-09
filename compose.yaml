@@ -1,0 +1,16 @@
+services:
+  app:
+    build: .
+    image: music2spotify:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATA_DIR: /app/data
+      REPORTS_DIR: /app/reports
+    volumes:
+      - ./:/app
+    # Published only with `docker compose run --service-ports` (make auth), for
+    # the OAuth redirect to http://127.0.0.1:8888/callback.
+    ports:
+      - "127.0.0.1:8888:8888"
