@@ -50,6 +50,10 @@ make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 accept
 Decisions end up in `data/overrides.csv` (`track_id,spotify,note`; `spotify` is a track link,
 `skip` or `none`), which can also be edited by hand.
 
+Besides the Music playlists and "All songs", the plan adds an `Insights` folder (rankings, genres,
+ratings, a timeline of last-played years and release decades, BPM ranges); the rules are described
+in `music2spotify/insights.py`.
+
 Then create the playlists:
 
 ```bash

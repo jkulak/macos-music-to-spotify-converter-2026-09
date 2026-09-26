@@ -10,6 +10,7 @@ from collections import Counter
 
 from . import auth
 from .config import Settings, load_settings
+from .insights import build_insights
 from .library import Library, LibraryError, load_library
 from .matching import ALTERNATIVE, MATCHED, NOT_FOUND, SKIPPED, UNCERTAIN
 from .pipeline import (
@@ -179,7 +180,8 @@ def _plan(settings: Settings):
     unmatched = [t for t in library.tracks if t not in results]
     if unmatched:
         raise UsageError(f"{len(unmatched)} library tracks have not been matched; run `make match`")
-    return build_plan(library, results, library.exported_at[:10])
+    return build_plan(library, results, library.exported_at[:10],
+                      build_insights(library, results))
 
 
 def plan(settings: Settings, args: argparse.Namespace) -> int:

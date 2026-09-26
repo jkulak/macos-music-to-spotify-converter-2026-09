@@ -32,3 +32,8 @@ scheme and releases are occasional snapshots rather than a product line.
 - The Web API cannot create folders, so playlist names carry their folder path
   (`Added / 2013 / 2013-04 Trap Dubstep`) and `reports/plan.md` is the checklist for arranging
   them; `make sync PLAYLIST_NAMES=plain` then drops the prefixes.
+- An `Insights` folder built from the listening history: Top 100 overall, rock and not rock;
+  Top 25 for every genre with 50+ tracks; the 10 most played artists; 5 stars, 4 stars and up,
+  forgotten gems and undiscovered songs; songs by the year they were last played and by release
+  decade; and four BPM ranges for DJ sets. "Rock" and ratings follow the rules of the smart
+  playlists in Music (genre contains "rock"; album-derived ratings count).

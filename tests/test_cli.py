@@ -125,12 +125,13 @@ class MatchCommandTest(unittest.TestCase):
 
         code, out, _ = self.run_cli("plan")
         self.assertEqual(code, 0)
-        self.assertIn("2 playlists in 1 folders", out)
+        self.assertRegex(out, r"(\d+) playlists in \d+ folders, .*; \1 would be created")
         self.assertEqual(self.fake.playlists, {})
 
         code, out, err = self.run_cli("sync")
         self.assertEqual(code, 0, err)
-        self.assertEqual(sorted(p["name"] for p in self.fake.playlists.values()), ["All songs", "Best / Top"])
+        names = {p["name"] for p in self.fake.playlists.values()}
+        self.assertLessEqual({"All songs", "Best / Top", "Insights / Rankings / Top 100"}, names)
         checklist = Path(self.env["REPORTS_DIR"], "plan.md").read_text(encoding="utf-8")
         self.assertIn("`Best / Top` — 1 of 1", checklist)
         self.assertIn("| Best / Top | 1 | 1 | 0 | created |", checklist)
