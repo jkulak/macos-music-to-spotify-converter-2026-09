@@ -24,6 +24,32 @@ cp /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09/.env.example /
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 export
 ```
 
+Create an app at https://developer.spotify.com/dashboard (Web API, redirect URI
+`http://127.0.0.1:8888/callback`), put its Client ID into `.env` as `SPOTIFY_CLIENT_ID`, then log in.
+Development-mode apps need the owner to have Premium.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 auth
+```
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match
+```
+
+`match` searches for every track (roughly an hour for 6,000 tracks at the default pace) and writes
+`reports/report.md`, `reports/not-found.csv`, `reports/review.csv` and `reports/skipped.csv`.
+Interrupting it loses nothing: searches are cached in `data/spotify-cache.jsonl`.
+
+To correct the result, mark rows in `reports/review.csv` with `y` or `n` in `accept`, or paste a
+Spotify link into the `spotify` column of `reports/not-found.csv`, then:
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 accept
+```
+
+Decisions end up in `data/overrides.csv` (`track_id,spotify,note`; `spotify` is a track link,
+`skip` or `none`), which can also be edited by hand.
+
 `make help` lists every target.
 
 ## Tests
