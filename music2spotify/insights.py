@@ -98,9 +98,12 @@ def rankings(ctx: Context) -> list[PlannedPlaylist]:
         own = [t for t in music if fold(t.artist) == artist]
         on_spotify = [t for t in own if ctx.uri(t)]
         picks += on_spotify[:5]
-    playlists.append(ctx.playlist(group, "top-artists", "Top 10 artists · 5 each",
-                                  "The 10 most played artists in Music, their 5 most played songs",
-                                  picks))
+    playlist = ctx.playlist(group, "top-artists", "Top 10 artists · 5 each",
+                            "The 10 most played artists in Music, their 5 most played songs", picks)
+    # Measured against what the library offers, not against what matched so far.
+    playlist.music_tracks = sum(min(5, sum(1 for t in music if fold(t.artist) == a))
+                                for a in top_artists)
+    playlists.append(playlist)
     return playlists
 
 
@@ -178,7 +181,8 @@ GROUPS = (rankings, genres, ratings, timeline, bpm)
 
 
 def build_insights(library: Library, results: dict[str, MatchResult]) -> list[PlannedPlaylist]:
-    """Every insight that has something in it. Unlike the Music mirrors, which are
-    kept even when empty to complete the structure, an empty insight says nothing."""
+    """Every insight the library has songs for. Which insights exist depends on the
+    library only, not on how far matching has got, so no new playlist turns up
+    at the top of Your Library after the folders have been arranged."""
     ctx = Context(library, results)
-    return [playlist for group in GROUPS for playlist in group(ctx) if playlist.uris]
+    return [playlist for group in GROUPS for playlist in group(ctx) if playlist.music_tracks]

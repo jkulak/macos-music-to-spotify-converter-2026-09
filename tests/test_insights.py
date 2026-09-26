@@ -60,6 +60,22 @@ class RankingsTest(unittest.TestCase):
         self.assertEqual(build_insights(lib, results), [])
 
 
+class StableSetTest(unittest.TestCase):
+    def test_an_insight_exists_as_soon_as_the_library_has_songs_for_it_even_before_matching(self):
+        lib, results = library(track(name="Riff", genre="Punkrock", plays=5, rating=100),
+                               missing={"Riff"})
+        playlists = build_insights(lib, results)
+        five = insight(playlists, "5 stars")
+        self.assertEqual((five.uris, five.music_tracks), ([], 1))
+        self.assertIn("Top 10 artists · 5 each", [p.name for p in playlists])
+
+    def test_the_set_of_insights_does_not_change_as_more_tracks_are_matched(self):
+        songs = [track(name=f"S{i}", genre="Grime", plays=i, bpm=140) for i in range(60)]
+        before = build_insights(*library(*songs, missing={f"S{i}" for i in range(60)}))
+        after = build_insights(*library(*songs))
+        self.assertEqual([p.key for p in before], [p.key for p in after])
+
+
 class GenresTest(unittest.TestCase):
     def test_spelling_variants_of_a_genre_are_merged_under_the_most_common_one(self):
         lib, _ = library(track(genre="Hip-Hop"), track(genre="Hip-Hop"), track(genre="Hip-hop"))
