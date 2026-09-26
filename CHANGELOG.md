@@ -28,7 +28,8 @@ scheme and releases are occasional snapshots rather than a product line.
   at all when another track of the album is already matched; the rest get one search each across
   the library before any track gets a second. When the quota runs out the run still saves matches
   and reports, says how many tracks remain and when Spotify allows more, and exits with code 3;
-  `make match-until-done` waits and resumes by itself.
+  `make match-until-done` waits and resumes by itself; `make migrate-until-done` also syncs the
+  playlists after every run, so they fill up day by day.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

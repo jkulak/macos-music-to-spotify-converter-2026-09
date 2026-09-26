@@ -49,6 +49,9 @@ this keeps going by itself until everything has been searched (the Mac has to st
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match-until-done
 ```
 
+`migrate-until-done` does the same and syncs the playlists after every run, so they fill up while
+the quota allows more searches each day.
+
 To correct the result, mark rows in `reports/review.csv` with `y` or `n` in `accept`, or paste a
 Spotify link into the `spotify` column of `reports/not-found.csv`, then:
 

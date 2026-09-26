@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help build export smoke-export summary auth match match-until-done rematch report accept plan sync test
+.PHONY: help build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept plan sync test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -34,13 +34,10 @@ match: ## Find every library track on Spotify and write reports/ (cached, resuma
 	$(RUN) match
 
 match-until-done: ## Repeat match, sleeping out each Spotify quota block, until every track is searched
-	@while true; do \
-		$(RUN) match; status=$$?; \
-		[ $$status -eq 3 ] || exit $$status; \
-		wait=$$(( $$(cat $(DATA)/retry-after-seconds) + 120 )); \
-		echo "Waiting $$wait s for the Spotify quota, until $$(date -v+$${wait}S '+%Y-%m-%d %H:%M')"; \
-		sleep $$wait; \
-	done
+	$(ROOT)/scripts/until-done.sh match
+
+migrate-until-done: ## Like match-until-done, with a sync after every run so playlists fill up daily
+	PLAYLIST_NAMES='$(PLAYLIST_NAMES)' $(ROOT)/scripts/until-done.sh migrate
 
 rematch: ## Re-score from cached searches only, without calling Spotify
 	$(RUN) match --offline
