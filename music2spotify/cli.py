@@ -5,18 +5,16 @@ from __future__ import annotations
 import argparse
 import secrets
 import sys
-import time
 from collections import Counter
+from datetime import datetime, timedelta, timezone
 
 from . import auth
 from .config import Settings, load_settings
 from .insights import build_insights
 from .library import Library, LibraryError, load_library
-from .matching import ALTERNATIVE, MATCHED, NOT_FOUND, SKIPPED, UNCERTAIN
 from .pipeline import (
     JsonLinesCache,
-    cached_lookup,
-    cached_search,
+    Sources,
     load_matches,
     load_overrides,
     match_library,
@@ -103,25 +101,16 @@ def login(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
-def _progress(started: float):
-    def show(done: int, total: int, counts: Counter) -> None:
-        if done % 100 and done != total:
-            return
-        elapsed = time.monotonic() - started
-        eta = elapsed / done * (total - done)
-        print(f"{done}/{total}  matched {counts[MATCHED]}  uncertain {counts[UNCERTAIN]}  "
-              f"other version {counts[ALTERNATIVE]}  not found {counts[NOT_FOUND]}  "
-              f"skipped {counts[SKIPPED]}  ~{eta / 60:.0f} min left", flush=True)
-    return show
+def _progress(stage: str, done: int, total: int) -> None:
+    if done % 100 == 0 or done == total:
+        print(f"{stage}: {done}/{total}", flush=True)
 
 
 def match(settings: Settings, args: argparse.Namespace) -> int:
     library = load_library(settings.library_path)
     overrides = load_overrides(settings.overrides_path)
-    cache = JsonLinesCache(settings.cache_path)
     client = None if args.offline else _client(settings)
-    search = cached_search(cache, client.search_tracks if client else None)
-    lookup = cached_lookup(cache, client.track if client else None)
+    sources = Sources(JsonLinesCache(settings.cache_path), client)
 
     only = None
     if args.track:
@@ -130,21 +119,31 @@ def match(settings: Settings, args: argparse.Namespace) -> int:
         only = list(library.tracks)[: args.limit]
     previous = load_matches(settings.matches_path) if settings.matches_path.exists() else {}
 
-    started = time.monotonic()
-    try:
-        results = match_library(library, search, lookup, overrides, _progress(started), only)
-    except RateLimited as error:
-        print(f"stopped: {error}", file=sys.stderr)
-        return 3
+    results = match_library(library, sources, overrides, _progress, only)
     if only is not None:
         results = {**{k: v for k, v in previous.items() if k in library.tracks}, **results}
     save_matches(settings.matches_path, results)
     paths = write_reports(library, results, settings.reports_dir)
     counts = Counter(r.status for r in results.values())
+    unsearched = sum(1 for r in results.values() if r.unsearched)
     print(f"\n{len(results)} tracks: " + ", ".join(f"{n} {s}" for s, n in counts.most_common()))
     if client:
         print(f"{client.requests_made} requests to Spotify")
     print("Reports: " + ", ".join(str(p) for p in paths))
+
+    blocked_file = settings.data_dir / "retry-after-seconds"
+    if sources.blocked:
+        blocked = sources.blocked
+        until = datetime.now(timezone.utc) + timedelta(seconds=blocked.retry_after)
+        blocked_file.write_text(str(blocked.retry_after))
+        print(f"\nSpotify quota used up ({blocked.reason or 'rate limit'}): {unsearched} tracks "
+              f"still have searches to run. More allowed after {until:%Y-%m-%d %H:%M} UTC; "
+              "run the same command then (make match-until-done waits by itself).",
+              file=sys.stderr)
+        return 3
+    blocked_file.unlink(missing_ok=True)
+    if unsearched:
+        print(f"{unsearched} tracks have searches that were not run (offline)", file=sys.stderr)
     return 0
 
 

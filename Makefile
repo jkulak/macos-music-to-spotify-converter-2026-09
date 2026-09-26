@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help build export smoke-export summary auth match rematch report accept plan sync test
+.PHONY: help build export smoke-export summary auth match match-until-done rematch report accept plan sync test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -32,6 +32,15 @@ auth: ## Log in to Spotify; the redirect comes back to http://127.0.0.1:8888/cal
 
 match: ## Find every library track on Spotify and write reports/ (cached, resumable)
 	$(RUN) match
+
+match-until-done: ## Repeat match, sleeping out each Spotify quota block, until every track is searched
+	@while true; do \
+		$(RUN) match; status=$$?; \
+		[ $$status -eq 3 ] || exit $$status; \
+		wait=$$(( $$(cat $(DATA)/retry-after-seconds) + 120 )); \
+		echo "Waiting $$wait s for the Spotify quota, until $$(date -v+$${wait}S '+%Y-%m-%d %H:%M')"; \
+		sleep $$wait; \
+	done
 
 rematch: ## Re-score from cached searches only, without calling Spotify
 	$(RUN) match --offline

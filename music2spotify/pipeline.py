@@ -6,11 +6,11 @@ import csv
 import json
 import re
 import time
-from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .albums import AlbumGroup, AlbumHit, album_groups, rank_albums
 from .library import Library, Track
 from .matching import (
     MATCHED,
@@ -20,9 +20,7 @@ from .matching import (
     best_assessment,
     search_queries,
 )
-
-Search = Callable[[str], list[Candidate] | None]  # None: not cached and offline
-Lookup = Callable[[str], Candidate | None]
+from .spotify import RateLimited, SpotifyClient
 
 
 class JsonLinesCache:
@@ -52,30 +50,74 @@ class JsonLinesCache:
             out.write(json.dumps({"key": key, "value": value}, ensure_ascii=False) + "\n")
 
 
-def cached_search(cache: JsonLinesCache, fetch: Callable[[str], list[dict]] | None) -> Search:
-    """Search through the cache; with no fetch function, only cached queries answer."""
+class Budget:
+    """One quota bucket. Once Spotify refuses with a long Retry-After, nothing more
+    is fetched from it in this run; cached answers keep coming."""
 
-    def search(query: str) -> list[Candidate] | None:
-        key = f"search:{query}"
-        if key not in cache:
-            if fetch is None:
+    def __init__(self):
+        self.blocked: RateLimited | None = None
+
+    def call(self, fetch: Callable, *args):
+        if self.blocked is not None:
+            return None
+        try:
+            return fetch(*args)
+        except RateLimited as error:
+            self.blocked = error
+            return None
+
+
+class Sources:
+    """Spotify answers through the cache. Without a client (offline) or once a
+    quota bucket is used up, anything not cached comes back as None."""
+
+    def __init__(self, cache: JsonLinesCache, client: SpotifyClient | None = None):
+        self.cache = cache
+        self.client = client
+        self.search_budget = Budget()  # track and album search share Spotify's search quota
+        self.catalogue_budget = Budget()  # album track lists and single tracks
+
+    @property
+    def blocked(self) -> RateLimited | None:
+        return self.search_budget.blocked or self.catalogue_budget.blocked
+
+    def _cached(self, key: str, budget: Budget, fetch: Callable | None, convert: Callable):
+        if key not in self.cache:
+            if self.client is None or fetch is None:
                 return None
-            cache.put(key, [Candidate.from_api(item).to_dict() for item in fetch(query) if item])
-        return [Candidate.from_dict(c) for c in cache.get(key)]
-
-    return search
-
-
-def cached_lookup(cache: JsonLinesCache, fetch: Callable[[str], dict] | None) -> Lookup:
-    def lookup(track_id: str) -> Candidate | None:
-        key = f"track:{track_id}"
-        if key not in cache:
-            if fetch is None:
+            fetched = budget.call(fetch)
+            if fetched is None:
                 return None
-            cache.put(key, Candidate.from_api(fetch(track_id)).to_dict())
-        return Candidate.from_dict(cache.get(key))
+            self.cache.put(key, convert(fetched))
+        return self.cache.get(key)
 
-    return lookup
+    def search(self, query: str) -> list[Candidate] | None:
+        found = self._cached(
+            f"search:{query}", self.search_budget,
+            self.client and (lambda: self.client.search_tracks(query)),
+            lambda items: [Candidate.from_api(i).to_dict() for i in items if i])
+        return None if found is None else [Candidate.from_dict(c) for c in found]
+
+    def lookup(self, track_id: str) -> Candidate | None:
+        found = self._cached(
+            f"track:{track_id}", self.catalogue_budget,
+            self.client and (lambda: self.client.track(track_id)),
+            lambda item: Candidate.from_api(item).to_dict())
+        return None if found is None else Candidate.from_dict(found)
+
+    def search_albums(self, query: str) -> list[AlbumHit] | None:
+        found = self._cached(
+            f"album-search:{query}", self.search_budget,
+            self.client and (lambda: self.client.search_albums(query)),
+            lambda items: [AlbumHit.from_api(i).to_dict() for i in items if i])
+        return None if found is None else [AlbumHit.from_dict(a) for a in found]
+
+    def album_tracks(self, album: AlbumHit) -> list[Candidate] | None:
+        found = self._cached(
+            f"album-tracks:{album.id}", self.catalogue_budget,
+            self.client and (lambda: self.client.album_tracks(album.id)),
+            lambda items: [Candidate.from_album_track(i, album).to_dict() for i in items if i])
+        return None if found is None else [Candidate.from_dict(c) for c in found]
 
 
 # --- overrides ----------------------------------------------------------------
@@ -166,8 +208,9 @@ class MatchResult:
         return cls(**{**data, "candidate": candidate})
 
 
-def match_track(track: Track, search: Search, lookup: Lookup,
-                override: Override | None = None) -> MatchResult:
+def match_track(track: Track, sources: Sources, override: Override | None = None,
+                extra: Iterable[Candidate] = (), max_queries: int | None = None) -> MatchResult:
+    """Match one track from its album's candidates (extra) and up to max_queries searches."""
     if override is not None:
         if override.spotify == SKIP:
             return MatchResult(track.id, SKIPPED, source="override",
@@ -175,7 +218,7 @@ def match_track(track: Track, search: Search, lookup: Lookup,
         if override.spotify == NONE:
             return MatchResult(track.id, NOT_FOUND, source="override",
                                notes=[override.note or "confirmed not on Spotify"])
-        candidate = lookup(override.spotify)
+        candidate = sources.lookup(override.spotify)
         if candidate is not None:
             return MatchResult(track.id, MATCHED, candidate, score=1.0, source="override",
                                notes=[override.note or "set in overrides"])
@@ -183,21 +226,23 @@ def match_track(track: Track, search: Search, lookup: Lookup,
     if reason:
         return MatchResult(track.id, SKIPPED, source="library", notes=[reason])
 
-    candidates: dict[str, Candidate] = {}
-    best = None
-    unsearched = 0
-    for query in search_queries(track):
-        found = search(query)
-        if found is None:
-            unsearched += 1
-            continue
-        for candidate in found:
-            candidates.setdefault(candidate.uri, candidate)
-        best = best_assessment(track, list(candidates.values()))
-        if best is not None and best.status == MATCHED:
-            break
+    candidates: dict[str, Candidate] = {c.uri: c for c in extra}
+    best = best_assessment(track, list(candidates.values())) if candidates else None
+    searched = unsearched = 0
+    if best is None or best.status != MATCHED:
+        for query in search_queries(track)[:max_queries]:
+            found = sources.search(query)
+            if found is None:
+                unsearched += 1
+                continue
+            searched += 1
+            for candidate in found:
+                candidates.setdefault(candidate.uri, candidate)
+            best = best_assessment(track, list(candidates.values()))
+            if best is not None and best.status == MATCHED:
+                break
     if best is None:
-        notes = ["no search results"] if not unsearched else []
+        notes = ["no search results"] if searched else []
         return MatchResult(track.id, NOT_FOUND, notes=notes, unsearched=unsearched)
     return MatchResult(
         track.id, best.status, best.candidate, score=best.score, title=best.title,
@@ -206,19 +251,93 @@ def match_track(track: Track, search: Search, lookup: Lookup,
     )
 
 
-def match_library(library: Library, search: Search, lookup: Lookup,
-                  overrides: dict[str, Override],
-                  progress: Callable[[int, int, Counter], None] | None = None,
+Progress = Callable[[str, int, int], None]
+
+
+def _album_of(candidate: Candidate, sources: Sources) -> AlbumHit | None:
+    """The Spotify album a matched track came from. Older cache entries lack the
+    album ID; looking the track up costs catalogue quota, not search quota."""
+    if not candidate.album_id:
+        candidate = sources.lookup(candidate.id)
+        if candidate is None or not candidate.album_id:
+            return None
+    return AlbumHit(candidate.album_id, candidate.album, candidate.artists,
+                    candidate.album_type, candidate.release_date, 0)
+
+
+def _album_candidates(group: AlbumGroup, sources: Sources, tracks: dict[str, Track],
+                      results: dict[str, MatchResult]) -> list[Candidate]:
+    hits: list[AlbumHit] = []
+    # A track of the album that is already matched names the album for free.
+    for track_id in group.track_ids:
+        result = results.get(track_id)
+        if result and result.status == MATCHED and result.candidate:
+            known = _album_of(result.candidate, sources)
+            if known and rank_albums(group, [known]):
+                hits = [known]
+                break
+    if not hits:
+        for query in group.queries():
+            found = sources.search_albums(query)
+            if found is None:
+                return []
+            hits = rank_albums(group, found)
+            if hits:
+                break
+    candidates: list[Candidate] = []
+    members = [tracks[i] for i in group.track_ids]
+    for hit in hits[:2]:
+        listing = sources.album_tracks(hit)
+        if listing is None:
+            break
+        candidates += listing
+        settled = sum(1 for t in members
+                      if (a := best_assessment(t, candidates)) and a.status == MATCHED)
+        # Deluxe and standard editions both exist often; look at the second
+        # candidate only when the first leaves most of the tracks open.
+        if settled * 2 >= len(members):
+            break
+    return candidates
+
+
+def match_library(library: Library, sources: Sources, overrides: dict[str, Override],
+                  progress: Progress | None = None,
                   only: Iterable[str] | None = None) -> dict[str, MatchResult]:
+    """Match in the order that gets the most out of the search quota: what the
+    cache already settles, then album by album, then one search per track
+    across the library, then the next search for whatever is still open."""
     tracks = [library.tracks[i] for i in only] if only is not None else list(library.tracks.values())
-    results: dict[str, MatchResult] = {}
-    counts: Counter = Counter()
-    for done, track in enumerate(tracks, start=1):
-        result = match_track(track, search, lookup, overrides.get(track.id))
-        results[track.id] = result
-        counts[result.status] += 1
+
+    def report(stage: str, done: int, total: int) -> None:
         if progress:
-            progress(done, len(tracks), counts)
+            progress(stage, done, total)
+
+    offline = Sources(sources.cache)
+    results = {t.id: match_track(t, offline, overrides.get(t.id)) for t in tracks}
+
+    def is_open(track: Track) -> bool:
+        result = results[track.id]
+        return result.status not in (MATCHED, SKIPPED) and result.source != "override"
+
+    extra: dict[str, list[Candidate]] = {}
+    groups = [g for g in album_groups([t for t in tracks if t.is_music and t.id not in overrides])
+              if any(is_open(library.tracks[i]) for i in g.track_ids)]
+    for done, group in enumerate(groups, start=1):
+        candidates = _album_candidates(group, sources, library.tracks, results)
+        for track_id in group.track_ids:
+            extra[track_id] = candidates
+        report("albums", done, len(groups))
+
+    query_count = {t.id: len(search_queries(t)) for t in tracks}
+    for max_queries in range(1, max(query_count.values(), default=0) + 1):
+        # The first round takes every open track, so album candidates are weighed
+        # even for tracks with nothing to search for.
+        pending = [t for t in tracks if is_open(t)
+                   and (max_queries == 1 or query_count[t.id] >= max_queries)]
+        for done, track in enumerate(pending, start=1):
+            results[track.id] = match_track(track, sources, overrides.get(track.id),
+                                            extra.get(track.id, ()), max_queries)
+            report(f"search {max_queries}", done, len(pending))
     return results
 
 

@@ -22,6 +22,13 @@ scheme and releases are occasional snapshots rather than a product line.
   Searches are cached and paced, 429 responses honoured, and a long ban stops the run cleanly.
   Search runs in an explicit market (`SPOTIFY_MARKET`, default `PL`): `market=from_token` needs a
   scope the app does not ask for, and a named market also tells which tracks cannot be played there.
+- Matching fits the development-mode quotas: Spotify allows roughly 700 searches a day per
+  developer account (`429 QUOTA_EXCEEDED`, Retry-After ~24 h), while album track lists are not
+  counted as searches. Tracks sharing an album are matched from one album search, or with no search
+  at all when another track of the album is already matched; the rest get one search each across
+  the library before any track gets a second. When the quota runs out the run still saves matches
+  and reports, says how many tracks remain and when Spotify allows more, and exits with code 3;
+  `make match-until-done` waits and resumes by itself.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.
