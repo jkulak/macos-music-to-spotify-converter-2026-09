@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from music2spotify.matching import (
     ALTERNATIVE,
@@ -69,6 +70,13 @@ class MatchingTest(unittest.TestCase):
     def test_a_track_without_an_artist_is_at_most_uncertain(self):
         track = library_track(name="Paper Lanterns", artist="", albumArtist="", duration=201)
         self.assertEqual(status(track, candidate("Paper Lanterns", ["The Quiet Engines"], 201)), UNCERTAIN)
+
+    def test_a_track_that_cannot_be_played_in_the_market_is_not_a_match(self):
+        track = library_track(name="Paper Lanterns", artist="The Quiet Engines", duration=201)
+        greyed = replace(candidate("Paper Lanterns", ["The Quiet Engines"], 201), playable=False)
+        best = best_assessment(track, [greyed])
+        self.assertEqual(best.status, NOT_FOUND)
+        self.assertIn("on Spotify but not playable in this market (would be matched)", best.notes)
 
     def test_the_original_album_is_preferred_over_a_compilation(self):
         track = library_track(name="Paper Lanterns", artist="The Quiet Engines", album="Harbour Lights")
