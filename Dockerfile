@@ -7,5 +7,6 @@ WORKDIR /app
 # Standard library only: nothing to pip install.
 COPY music2spotify ./music2spotify
 COPY tests ./tests
+COPY scripts ./scripts
 
 ENTRYPOINT ["python", "-m", "music2spotify"]
