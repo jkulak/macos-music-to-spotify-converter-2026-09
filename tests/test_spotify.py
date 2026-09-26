@@ -31,12 +31,12 @@ class SpotifyClientTest(unittest.TestCase):
         self.client = SpotifyClient(self.tokens, f"{self.base}/v1", min_interval=0,
                                     max_retry_wait=60, sleep=self.slept.append)
 
-    def test_search_asks_for_ten_tracks_in_the_users_market(self):
+    def test_search_asks_for_ten_tracks_in_the_configured_market(self):
         self.fake.add_track("Paper Lanterns", ["The Quiet Engines"])
         items = self.client.search_tracks("track:paper lanterns artist:the quiet engines")
         self.assertEqual([i["name"] for i in items], ["Paper Lanterns"])
         query = self.fake.calls("GET", "/v1/search")[0].query
-        self.assertEqual((query["limit"], query["market"], query["type"]), ("10", "from_token", "track"))
+        self.assertEqual((query["limit"], query["market"], query["type"]), ("10", "PL", "track"))
 
     def test_an_expired_token_is_refreshed_before_the_request(self):
         self.wall.now += 3600

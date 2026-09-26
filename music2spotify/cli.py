@@ -38,7 +38,7 @@ def _tokens(settings: Settings) -> TokenStore:
 
 def _client(settings: Settings) -> SpotifyClient:
     return SpotifyClient(_tokens(settings), settings.api_base, settings.min_interval,
-                         settings.max_retry_wait)
+                         settings.max_retry_wait, settings.market)
 
 
 def _print_tree(library: Library) -> None:

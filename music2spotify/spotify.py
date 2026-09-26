@@ -104,13 +104,14 @@ class TokenStore:
 
 class SpotifyClient:
     def __init__(self, tokens: TokenStore, api_base: str = "https://api.spotify.com/v1",
-                 min_interval: float = 0.35, max_retry_wait: int = 120,
+                 min_interval: float = 0.35, max_retry_wait: int = 120, market: str = "PL",
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic):
         self.tokens = tokens
         self.api_base = api_base.rstrip("/")
         self.min_interval = min_interval
         self.max_retry_wait = max_retry_wait
+        self.market = market
         self.sleep = sleep
         self.clock = clock
         self.requests_made = 0
@@ -170,12 +171,12 @@ class SpotifyClient:
 
     def search_tracks(self, query: str, limit: int = SEARCH_LIMIT) -> list[dict]:
         result = self.request("GET", "/search", {
-            "q": query, "type": "track", "limit": limit, "market": "from_token",
+            "q": query, "type": "track", "limit": limit, "market": self.market,
         })
         return ((result or {}).get("tracks") or {}).get("items") or []
 
     def track(self, track_id: str) -> dict:
-        return self.request("GET", f"/tracks/{track_id}", {"market": "from_token"})
+        return self.request("GET", f"/tracks/{track_id}", {"market": self.market})
 
     # --- the user's playlists ------------------------------------------------
 

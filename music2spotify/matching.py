@@ -47,6 +47,7 @@ class Candidate:
     release_date: str
     duration_ms: int
     isrc: str = ""
+    playable: bool = True  # in the configured market
 
     @property
     def id(self) -> str:
@@ -76,6 +77,7 @@ class Candidate:
             release_date=album.get("release_date") or "",
             duration_ms=item.get("duration_ms") or 0,
             isrc=(item.get("external_ids") or {}).get("isrc") or "",
+            playable=item.get("is_playable", True) is not False,
         )
 
     def to_dict(self) -> dict:
@@ -258,6 +260,10 @@ def assess(track: Track, reading: Reading, candidate: Candidate) -> Assessment:
         spotify = ", ".join(_describe(v) for v in theirs.versions) or "the original"
         notes.append(f"Music has {ours}, Spotify has {spotify}")
     else:
+        status = NOT_FOUND
+    if not candidate.playable and status != NOT_FOUND:
+        # A greyed-out entry in a playlist is no better than a missing one.
+        notes.append(f"on Spotify but not playable in this market (would be {status})")
         status = NOT_FOUND
     return Assessment(candidate, reading.label, title, artist, album, delta,
                       same_version, score, status, notes)

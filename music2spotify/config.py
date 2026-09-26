@@ -19,6 +19,7 @@ class Settings:
     accounts_base: str
     min_interval: float
     max_retry_wait: int
+    market: str
 
     @property
     def library_path(self) -> Path:
@@ -54,4 +55,7 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         accounts_base=env.get("SPOTIFY_ACCOUNTS_BASE", "https://accounts.spotify.com"),
         min_interval=float(env.get("SPOTIFY_MIN_INTERVAL", "0.35")),
         max_retry_wait=int(env.get("SPOTIFY_MAX_RETRY_WAIT", "120")),
+        # An explicit country: market=from_token needs the user-read-private scope,
+        # and naming it also makes Spotify say which tracks can be played there.
+        market=env.get("SPOTIFY_MARKET", "PL"),
     )

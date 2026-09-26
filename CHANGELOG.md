@@ -20,6 +20,8 @@ scheme and releases are occasional snapshots rather than a product line.
   acoustic, instrumental and acapella takes do not and are only proposed. Titles with
   "Artist - Title", featured artists, Camelot keys or track numbers typed in are read several ways.
   Searches are cached and paced, 429 responses honoured, and a long ban stops the run cleanly.
+  Search runs in an explicit market (`SPOTIFY_MARKET`, default `PL`): `market=from_token` needs a
+  scope the app does not ask for, and a named market also tells which tracks cannot be played there.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

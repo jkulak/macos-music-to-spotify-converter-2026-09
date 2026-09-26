@@ -42,13 +42,15 @@ class FakeSpotify:
     # --- test setup ----------------------------------------------------------
 
     def add_track(self, name: str, artists: list[str], album: str = "An Album",
-                  duration_ms: int = 200_000, album_type: str = "album") -> dict:
+                  duration_ms: int = 200_000, album_type: str = "album",
+                  playable: bool = True) -> dict:
         track_id = f"{next(self._ids):022d}"
         track = {
             "id": track_id, "uri": f"spotify:track:{track_id}", "name": name,
             "artists": [{"name": a} for a in artists],
             "album": {"name": album, "album_type": album_type, "release_date": "2010-01-01"},
             "duration_ms": duration_ms, "external_ids": {"isrc": f"XX{track_id[-10:]}"},
+            "is_playable": playable,
         }
         self.catalogue[track_id] = track
         return track
@@ -140,6 +142,9 @@ class FakeSpotify:
     def _route(self, method: str, path: str, query: dict, body):
         parts = path.strip("/").split("/")[1:]  # drop "v1"
         if parts == ["search"]:
+            if query.get("market") == "from_token":
+                # What Spotify answers without the user-read-private scope.
+                return 403, {"error": {"status": 403, "message": "Insufficient client scope"}}
             limit = int(query.get("limit", 5))
             if limit > 10:
                 return 400, {"error": {"status": 400, "message": "Invalid limit"}}
