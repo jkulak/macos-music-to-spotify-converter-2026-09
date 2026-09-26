@@ -25,3 +25,10 @@ scheme and releases are occasional snapshots rather than a product line.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.
+- `make plan` and `make sync` create one private Spotify playlist per Music playlist (smart ones
+  as a snapshot, in Music's order) plus "All songs", most played first. Re-running updates the
+  same playlists; the mapping lives in `data/spotify-state.json`, and playlists the tool did not
+  create are never touched.
+- The Web API cannot create folders, so playlist names carry their folder path
+  (`Added / 2013 / 2013-04 Trap Dubstep`) and `reports/plan.md` is the checklist for arranging
+  them; `make sync PLAYLIST_NAMES=plain` then drops the prefixes.
