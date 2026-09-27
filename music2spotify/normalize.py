@@ -51,8 +51,24 @@ def token_set_ratio(a: str, b: str) -> float:
     return max(scores)
 
 
+def token_sort_ratio(a: str, b: str) -> float:
+    return SequenceMatcher(None, " ".join(sorted(a.split())), " ".join(sorted(b.split()))).ratio()
+
+
+def strict_similarity(a: str, b: str) -> float:
+    """Similarity that ignores word order but not extra words: a phrase contained
+    in a longer one ("threshold" in "kitchen threshold") is not the same thing."""
+    if not a or not b:
+        return 0.0
+    if a == b:
+        return 1.0
+    return max(SequenceMatcher(None, a, b).ratio(), token_sort_ratio(a, b))
+
+
 def similarity(a: str, b: str) -> float:
-    """Best of a plain sequence ratio and the order-insensitive token ratio."""
+    """Best of a plain sequence ratio and the order-insensitive token ratio.
+    Tolerates extra words on one side, which suits album titles and search
+    ranking but on its own is too lenient to call two tracks the same."""
     if not a or not b:
         return 0.0
     if a == b:
@@ -66,7 +82,7 @@ def similarity(a: str, b: str) -> float:
 # the marker names someone (the remixer, the bootlegger), which then has to match.
 DISTINCT = {
     "remix": True, "rmx": True, "bootleg": True, "flip": True, "rework": True,
-    "refix": True, "vip": False, "live": False, "acoustic": False,
+    "refix": True, "re work": True, "vip": False, "live": False, "acoustic": False,
     "unplugged": False, "instrumental": False, "acapella": False, "cover": False,
     "demo": False, "karaoke": False, "slowed": False, "sped up": False,
     "mashup": True, "dub": False, "re edit": True, "reedit": True, "remake": True,
@@ -87,6 +103,7 @@ NEUTRAL = re.compile(
 )
 # DJ annotations some files carry: Camelot keys ("10B") and BPM ("78.17").
 _ANNOTATION = re.compile(r"^(\d{1,2}[ab]|\d{2,3}([.,]\d+)?( ?bpm)?)$")
+_TRAILING_VERSION = re.compile(r"\s(remix|rmx|bootleg|flip|vip|rework|refix|mashup)$")
 _FEAT = re.compile(r"^(feat|featuring|ft|with)\b\.?\s*", re.I)
 _INLINE_FEAT = re.compile(r"\s+(?:\(|\[)?(?:feat\.?|featuring|ft\.)\s+", re.I)
 _BRACKETS = re.compile(r"\s*[\(\[\{]([^\)\]\}]*)[\)\]\}]")
@@ -186,6 +203,12 @@ def parse_title(title: str) -> ParsedTitle:
         text, guests = inline
         featured.extend(_split_artists(guests))
     core = fold(" ".join([text, *kept]))
+    # "Cruel Intentions Joker Remix": a version named at the end without brackets.
+    # Who made it cannot be told from the title words, so it is left unnamed.
+    trailing = _TRAILING_VERSION.search(core)
+    if trailing and trailing.start() > 0:
+        versions.append(Version(trailing.group(1).replace("rmx", "remix")))
+        core = core[: trailing.start()].strip()
     return ParsedTitle(
         core=core,
         featured=tuple(featured),
