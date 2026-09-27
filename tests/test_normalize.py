@@ -84,3 +84,15 @@ class ArtistSplittingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VersionSpellingTest(unittest.TestCase):
+    def test_a_hyphenated_re_work_is_a_distinct_version(self):
+        self.assertEqual(parse_title("Harbour (Velvet Kid Re-Work)").versions, {Version("re work", "velvet kid")})
+
+    def test_a_remix_named_at_the_end_without_brackets_is_a_distinct_version(self):
+        parsed = parse_title("Cruel Lanterns Velvet Remix")
+        self.assertEqual((parsed.core, parsed.versions), ("cruel lanterns velvet", {Version("remix")}))
+
+    def test_a_title_that_is_only_the_word_remix_stays_a_title(self):
+        self.assertEqual(parse_title("Remix").core, "remix")

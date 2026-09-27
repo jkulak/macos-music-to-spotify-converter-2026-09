@@ -18,6 +18,7 @@ from .normalize import (
     parse_title,
     similarity,
     split_artists,
+    strict_similarity,
     strip_the,
     versions_compatible,
 )
@@ -205,22 +206,28 @@ class Assessment:
         )
 
 
-def _part_score(part: str, names: list[str], joined: str) -> float:
+def _part_score(part: str, names: list[str], joined: str, loose: bool) -> float:
     part = strip_the(part)
-    if f" {part} " in f" {joined} ":
-        return 1.0
-    return max((similarity(part, n) for n in names), default=0.0)
+    if loose:
+        if f" {part} " in f" {joined} ":
+            return 1.0
+        return max((similarity(part, n) for n in names), default=0.0)
+    return max((strict_similarity(part, n) for n in names), default=0.0)
 
 
-def artist_score(reading: Reading, candidate: Candidate) -> float:
+def artist_score(reading: Reading, candidate: Candidate, loose: bool = False) -> float:
+    """How well the credits agree. Strict compares whole names ("Beck" is not
+    "Jakob Beck"); loose also accepts a name found inside a longer credit
+    ("Blue Moon Boys" in "Nic Roulette & The Blue Moon Boys")."""
     if not reading.artists:
         return 0.5  # unknown artist: neither evidence for nor against
     names = [strip_the(fold(a)) for a in candidate.artists if a]
     if not names:
         return 0.0
     joined = " ".join(names)
-    whole = max(similarity(strip_the(reading.artist_text), n) for n in [*names, joined])
-    parts = [_part_score(p, names, joined) for p in reading.artists]
+    compare = similarity if loose else strict_similarity
+    whole = max(compare(strip_the(reading.artist_text), n) for n in [*names, joined])
+    parts = [_part_score(p, names, joined, loose) for p in reading.artists]
     # The main artist has to be there; the others (featured, "& friends") may be
     # missing on Spotify or credited differently, so they weigh less.
     by_parts = 0.7 * parts[0] + 0.3 * (sum(parts) / len(parts))
@@ -238,7 +245,11 @@ def duration_score(delta: float | None) -> float:
 
 def assess(track: Track, reading: Reading, candidate: Candidate) -> Assessment:
     theirs = parse_title(candidate.name)
-    title = similarity(reading.title.core, theirs.core)
+    title = strict_similarity(reading.title.core, theirs.core)
+    # One title inside the other ("Rap To Nie Zabawa" / "Rap to nie zabawa już") is
+    # often the same song with a word more, but just as often another song
+    # ("Threshold" / "Kitchen Threshold"); only the length can tell them apart.
+    overlap = title < 0.9 <= similarity(reading.title.core, theirs.core)
     artist = artist_score(reading, candidate)
     album = similarity(fold(track.album), fold(candidate.album)) if track.album else 0.0
     delta = abs(track.duration - candidate.duration) if track.duration else None
@@ -248,8 +259,27 @@ def assess(track: Track, reading: Reading, candidate: Candidate) -> Assessment:
     if reading.label != "as tagged":
         notes.append(f"read as {reading.label}")
 
+    credit_overlap = artist < 0.8 <= artist_score(reading, candidate, loose=True)
     tolerance = max(10.0, 0.05 * (track.duration or 0))
-    if same_version and title >= 0.9 and artist >= 0.8 and reading.artists:
+    if (same_version and reading.artists and (overlap or credit_overlap)
+            and (title >= 0.9 or overlap) and (artist >= 0.8 or credit_overlap)):
+        # Containment on one side is fine when everything else agrees exactly;
+        # on both sides at once ("Beck – Threshold" / "Jakob Beck – Kitchen
+        # Threshold") it is a guess however the lengths compare.
+        lengths_agree = delta is not None and delta <= 3
+        if lengths_agree and not (overlap and credit_overlap):
+            status = MATCHED
+            notes.append("one title has words the other lacks; lengths agree" if overlap
+                         else "artist credited inside a longer name; lengths agree")
+        else:
+            status = UNCERTAIN
+            if overlap:
+                notes.append(f"titles only overlap ({title:.0%} similar)")
+            if credit_overlap:
+                notes.append("artist only appears inside a longer credit")
+            if delta is not None and not lengths_agree:
+                notes.append(f"length differs by {delta:.0f}s")
+    elif same_version and title >= 0.9 and artist >= 0.8 and reading.artists:
         if delta is None or delta <= tolerance:
             status = MATCHED
         elif reading.title.cut or theirs.cut:

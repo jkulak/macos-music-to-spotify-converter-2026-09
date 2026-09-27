@@ -30,6 +30,10 @@ scheme and releases are occasional snapshots rather than a product line.
   and reports, says how many tracks remain and when Spotify allows more, and exits with code 3;
   `make match-until-done` waits and resumes by itself; `make migrate-until-done` also syncs the
   playlists after every run, so they fill up day by day.
+- Titles or artists that only contain each other ("Threshold" / "Kitchen Threshold", "Beck" /
+  "Jakob Beck") no longer count as equal; they match only when everything else agrees and the
+  lengths are within 3 seconds, otherwise they go to review. "Re-Work" and a remix named at the end
+  of a title without brackets are recognised as distinct versions.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

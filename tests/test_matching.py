@@ -117,3 +117,51 @@ class ReadingsTest(unittest.TestCase):
         track = library_track(name="Kilo - Night Drive (Velvet Kid Remix)", artist="Kilo")
         artist_first = [r for r in readings(track) if r.label == "artist - title in the title field"]
         self.assertEqual(artist_first[0].title.core, "night drive")
+
+
+class OverlapTest(unittest.TestCase):
+    def test_an_artist_whose_name_sits_inside_a_longer_name_is_not_taken_on_the_name_alone(self):
+        track = library_track(name="Threshold", artist="Moth", duration=103)
+        self.assertEqual(status(track, candidate("Threshold", ["Harpo Moth"], 150)), UNCERTAIN)
+
+    def test_the_article_and_split_credits_still_count_as_the_same_artist(self):
+        engines = library_track(name="Paper Lanterns", artist="The Quiet Engines", duration=201)
+        self.assertEqual(status(engines, candidate("Paper Lanterns", ["Quiet Engines"], 201)), MATCHED)
+        duo = library_track(name="Cockpit", artist="Kilo & Moth", duration=125)
+        self.assertEqual(status(duo, candidate("Cockpit", ["Kilo", "Moth"], 125)), MATCHED)
+
+    def test_a_title_inside_a_longer_title_with_another_length_is_only_uncertain(self):
+        track = library_track(name="Threshold", artist="Moth", duration=103)
+        best = best_assessment(track, [candidate("Kitchen Threshold", ["Moth"], 224)])
+        self.assertEqual(best.status, UNCERTAIN)
+        self.assertIn("length differs by 121s", best.notes)
+
+    def test_a_title_inside_a_longer_title_with_the_same_length_is_a_match(self):
+        track = library_track(name="Rap To Nie Zabawa", artist="Kilo", duration=280)
+        best = best_assessment(track, [candidate("Rap to nie zabawa już", ["Kilo"], 280)])
+        self.assertEqual(best.status, MATCHED)
+        self.assertIn("one title has words the other lacks; lengths agree", best.notes)
+
+    def test_titles_that_differ_only_in_word_order_are_equal(self):
+        track = library_track(name="Night Drive Blue", artist="Kilo", duration=200)
+        self.assertEqual(status(track, candidate("Blue Night Drive", ["Kilo"], 230)), UNCERTAIN)
+        self.assertEqual(status(track, candidate("Blue Night Drive", ["Kilo"], 201)), MATCHED)
+
+
+class CreditOverlapTest(unittest.TestCase):
+    def test_a_band_credited_inside_a_longer_name_matches_when_title_and_length_agree(self):
+        track = library_track(name="Hellfire!", artist="Blue Harbour Boys", duration=191)
+        best = best_assessment(track, [candidate("Hellfire!", ["Nic Sorrel & The Blue Harbour Boys"], 190)])
+        self.assertEqual(best.status, MATCHED)
+        self.assertIn("artist credited inside a longer name; lengths agree", best.notes)
+
+    def test_a_band_credited_inside_a_longer_name_with_another_length_is_uncertain(self):
+        track = library_track(name="Hellfire!", artist="Blue Harbour Boys", duration=191)
+        self.assertEqual(status(track, candidate("Hellfire!", ["Nic Sorrel & The Blue Harbour Boys"], 240)),
+                         UNCERTAIN)
+
+    def test_title_and_artist_both_only_overlapping_is_never_a_match(self):
+        track = library_track(name="Threshold", artist="Moth", duration=224)
+        best = best_assessment(track, [candidate("Kitchen Threshold", ["Harpo Moth"], 224)])
+        self.assertEqual(best.status, UNCERTAIN)
+        self.assertIn("artist only appears inside a longer credit", best.notes)
