@@ -221,6 +221,23 @@ def push(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def review(settings: Settings, args: argparse.Namespace) -> int:
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        raise UsageError("review needs a terminal; run `make review` on the Mac, not in Docker")
+    from .review import ReviewSession, run
+
+    library = load_library(settings.library_path)
+    session = ReviewSession(library, load_matches(settings.matches_path), settings.overrides_path)
+    before = dict(session.overrides)
+    run(session)
+    changed = sum(1 for k in set(before) | set(session.overrides)
+                  if before.get(k) != session.overrides.get(k))
+    print(f"{changed} decisions changed, saved in {settings.overrides_path}.")
+    if changed:
+        print("Push them to Spotify with: make apply")
+    return 0
+
+
 COMMANDS = {
     "summary": (summary, "print the library snapshot as a folder tree with counts"),
     "validate": (validate, "check the snapshot is complete and consistent"),
@@ -230,6 +247,7 @@ COMMANDS = {
     "accept": (accept, "move decisions from review.csv and not-found.csv into overrides"),
     "plan": (plan, "write reports/plan.md: the playlists and folders sync would produce"),
     "sync": (push, "create or update the playlists in Spotify"),
+    "review": (review, "browse, play and decide the open tracks in a terminal UI (host only)"),
 }
 
 

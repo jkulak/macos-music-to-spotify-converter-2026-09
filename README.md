@@ -52,7 +52,25 @@ make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match-unt
 `migrate-until-done` does the same and syncs the playlists after every run, so they fill up while
 the quota allows more searches each day.
 
-To correct the result, mark rows in `reports/review.csv` with `y` or `n` in `accept`, or paste a
+To go through what matching could not decide, open the review UI. It runs on the Mac rather than
+in Docker, because it plays both versions for comparison: the Spotify candidate in the Spotify app
+and your file in Music.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 review
+```
+
+Three lists (to decide, not found, decided), most played first. `y` takes the Spotify track, `n`
+marks the song as not on Spotify, `x` leaves it out, `l` takes a pasted Spotify link, `u` undoes;
+`p` / `m` play the Spotify and the Music version, space pauses, `o` opens the track or a search in
+Spotify, `/` filters, `?` lists the keys. Every decision is saved to `data/overrides.csv` at once.
+Then push the decisions to Spotify (track lookups and sync, no search quota):
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 apply
+```
+
+Alternatively, mark rows in `reports/review.csv` with `y` or `n` in `accept`, or paste a
 Spotify link into the `spotify` column of `reports/not-found.csv`, then:
 
 ```bash
