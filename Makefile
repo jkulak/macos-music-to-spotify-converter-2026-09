@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept plan sync test
+.PHONY: help build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept plan sync review apply test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -53,6 +53,14 @@ plan: ## Write reports/plan.md: playlists and folders a sync would produce (no w
 	$(COMPOSE) run --rm $(NAMES) app plan
 
 sync: ## Create or update the playlists in Spotify (PLAYLIST_NAMES=plain once in folders)
+	$(COMPOSE) run --rm $(NAMES) app sync
+
+review: ## Browse, play and decide the open tracks in a terminal UI (on the Mac: needs Music, Spotify, audio)
+	@python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null || { echo "make review needs Python 3.11+ on the Mac (python3 on PATH)"; exit 1; }
+	@cd $(ROOT) && python3 -m music2spotify review
+
+apply: ## Push decisions from data/overrides.csv to Spotify (track lookups and sync, no search quota)
+	$(RUN) match
 	$(COMPOSE) run --rm $(NAMES) app sync
 
 test: build ## Run the unit and end-to-end tests in Docker

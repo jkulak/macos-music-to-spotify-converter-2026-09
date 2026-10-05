@@ -34,6 +34,10 @@ scheme and releases are occasional snapshots rather than a product line.
   "Jakob Beck") no longer count as equal; they match only when everything else agrees and the
   lengths are within 3 seconds, otherwise they go to review. "Re-Work" and a remix named at the end
   of a title without brackets are recognised as distinct versions.
+- `make review`: a terminal UI to go through uncertain matches, other versions and missing tracks,
+  most played first, with both versions playable for comparison (Spotify app and Music, via
+  AppleScript on the Mac) and every decision saved to `data/overrides.csv` as it is made.
+  `make apply` pushes the decisions to Spotify.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.
