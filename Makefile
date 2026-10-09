@@ -57,7 +57,7 @@ sync: ## Create or update the playlists in Spotify (PLAYLIST_NAMES=plain once in
 
 review: ## Browse, play and decide the open tracks in a terminal UI (on the Mac: needs Music, Spotify, audio)
 	@python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null || { echo "make review needs Python 3.11+ on the Mac (python3 on PATH)"; exit 1; }
-	@cd $(ROOT) && python3 -m music2spotify review
+	@cd $(ROOT) && set -a && { [ ! -f .env ] || . ./.env; } && set +a && python3 -m music2spotify review
 
 apply: ## Push decisions from data/overrides.csv to Spotify (track lookups and sync, no search quota)
 	$(RUN) match

@@ -37,7 +37,8 @@ scheme and releases are occasional snapshots rather than a product line.
 - `make review`: a terminal UI to go through uncertain matches, other versions and missing tracks,
   most played first, with both versions playable for comparison (Spotify app and Music, via
   AppleScript on the Mac) and every decision saved to `data/overrides.csv` as it is made.
-  `make apply` pushes the decisions to Spotify.
+  `make apply` pushes the decisions to Spotify. A pasted Spotify link shows the title, artist and
+  album it points at, and `p` then plays that track, so a hand-picked version can be checked.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

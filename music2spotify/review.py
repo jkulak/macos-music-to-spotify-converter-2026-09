@@ -16,11 +16,12 @@ import curses
 import locale
 import os
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .library import Library, Track
-from .matching import ALTERNATIVE, NOT_FOUND, UNCERTAIN
+from .matching import ALTERNATIVE, NOT_FOUND, UNCERTAIN, Candidate
 from .normalize import fold
 from .pipeline import NONE, SKIP, MatchResult, Override, load_overrides, save_overrides, spotify_track_id
 from .players import Player
@@ -44,9 +45,16 @@ class Item:
 
 
 class ReviewSession:
-    def __init__(self, library: Library, results: dict[str, MatchResult], overrides_path: Path):
+    def __init__(self, library: Library, results: dict[str, MatchResult], overrides_path: Path,
+                 lookup: Callable[[str], Candidate | None] | None = None,
+                 cached: Callable[[str], Candidate | None] | None = None):
         self.overrides_path = overrides_path
         self.overrides = load_overrides(overrides_path)
+        # lookup may ask Spotify (used once, when a link is pasted); cached only
+        # reads what is already known, so drawing the screen never waits on the network.
+        self._lookup = lookup or (lambda track_id: None)
+        self._cached = cached or (lambda track_id: None)
+        self._linked: dict[str, Candidate | None] = {}
         member_of = memberships(library)
         items = {i: Item(library.tracks[i], r, member_of.get(i, []))
                  for i, r in results.items() if i in library.tracks and library.tracks[i].is_music}
@@ -97,7 +105,26 @@ class ReviewSession:
         if track_id is None:
             return False
         self._set(Override(item.track.id, track_id, NOTE["link"]))
+        try:
+            self._linked[track_id] = self._lookup(track_id)
+        except Exception:  # noqa: BLE001 - offline or logged out: the ID alone is enough to save
+            self._linked[track_id] = None
         return True
+
+    def linked_track(self, track_id: str) -> Candidate | None:
+        """What a pasted link points at, when known, for showing and playing it."""
+        if track_id not in self._linked:
+            self._linked[track_id] = self._cached(track_id)
+        return self._linked[track_id]
+
+    def spotify_to_play(self, item: Item) -> Candidate | None:
+        """The Spotify track that will be used: the pasted link if any, else the candidate."""
+        decided = self.decision(item)
+        if decided and decided.spotify not in (NONE, SKIP) and (
+                item.result.candidate is None or decided.spotify != item.result.candidate.id):
+            known = self.linked_track(decided.spotify)
+            return known or Candidate(f"spotify:track:{decided.spotify}", decided.spotify, (), "", "", "", 0)
+        return item.result.candidate
 
     def undo(self, item: Item) -> bool:
         if self.overrides.pop(item.track.id, None) is None:
@@ -162,7 +189,8 @@ STATUS_TITLE = {UNCERTAIN: ("probably the same", "warn"), ALTERNATIVE: ("another
                 NOT_FOUND: ("closest result", "bad")}
 
 
-def describe_decision(decided: Override | None, item: Item) -> tuple[str, str]:
+def describe_decision(decided: Override | None, item: Item,
+                      linked: Candidate | None = None) -> tuple[str, str]:
     if decided is None:
         return "undecided", "dim"
     if decided.spotify == NONE:
@@ -171,7 +199,10 @@ def describe_decision(decided: Override | None, item: Item) -> tuple[str, str]:
         return "⊘ left out of Spotify", "dim"
     if item.result.candidate and decided.spotify == item.result.candidate.id:
         return "✓ take this Spotify track", "good"
-    return f"↗ linked by hand: open.spotify.com/track/{decided.spotify}", "accent"
+    if linked:
+        details = " · ".join(x for x in (linked.album, linked.release_date[:4], length(linked.duration)) if x)
+        return f"↗ your link: {linked.label} ({details})", "accent"
+    return f"↗ your link: open.spotify.com/track/{decided.spotify}", "accent"
 
 
 def detail_lines(session: ReviewSession, item: Item) -> list[tuple[str, str]]:
@@ -206,7 +237,9 @@ def detail_lines(session: ReviewSession, item: Item) -> list[tuple[str, str]]:
     if r.notes:
         lines += [("", "normal"), ("WHY", "heading"), *[(n, "normal") for n in r.notes]]
     decided = session.decision(item)
-    lines += [("", "normal"), ("DECISION", "heading"), describe_decision(decided, item)]
+    linked = (session.linked_track(decided.spotify)
+              if decided and decided.spotify not in (NONE, SKIP) else None)
+    lines += [("", "normal"), ("DECISION", "heading"), describe_decision(decided, item, linked)]
     if decided and decided.note:
         lines.append((decided.note, "dim"))
     return lines
@@ -468,10 +501,15 @@ def handle(key, ui: UiState, session: ReviewSession, player: Player, screen: Scr
     elif key == "l" and screen:
         text = screen.ask("Spotify track link: ")
         if text:
-            ui.message = "↗ saved: linked by hand" if session.link(item, text) else "that is not a Spotify track link"
+            if session.link(item, text):
+                linked = session.linked_track(spotify_track_id(text))
+                ui.message = f"↗ saved: {linked.label}" if linked else "↗ saved: your link (title shown after make apply)"
+            else:
+                ui.message = "that is not a Spotify track link"
     elif key == "p":
-        if item.result.candidate:
-            player.play_spotify(item.result.candidate.id, item.result.candidate.label)
+        target = session.spotify_to_play(item)
+        if target:
+            player.play_spotify(target.id, target.label if target.artists else "your link")
         else:
             ui.message = "no Spotify track to play; o searches Spotify for it"
     elif key == "m":
