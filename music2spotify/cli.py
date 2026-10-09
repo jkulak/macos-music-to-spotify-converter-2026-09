@@ -227,7 +227,12 @@ def review(settings: Settings, args: argparse.Namespace) -> int:
     from .review import ReviewSession, run
 
     library = load_library(settings.library_path)
-    session = ReviewSession(library, load_matches(settings.matches_path), settings.overrides_path)
+    cache = JsonLinesCache(settings.cache_path)
+    # Logged in (.env loaded by make review): pasted links get their title from Spotify.
+    online = Sources(cache, _client(settings)) if settings.client_id and settings.token_path.exists() else None
+    offline = Sources(cache)
+    session = ReviewSession(library, load_matches(settings.matches_path), settings.overrides_path,
+                            lookup=(online or offline).lookup, cached=offline.lookup)
     before = dict(session.overrides)
     run(session)
     changed = sum(1 for k in set(before) | set(session.overrides)

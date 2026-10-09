@@ -155,3 +155,34 @@ class TextFitTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PastedLinkTest(SessionTest):
+    def linked(self):
+        from tests.builders import candidate as make
+        return make("Cockpit (Original Mix)", ["Kilo"], 240, album="Cockpit EP", id=LINKED)
+
+    def test_a_pasted_link_shows_which_track_it_points_at(self):
+        found = self.linked()
+        session = ReviewSession(self.library, self.results, self.path, lookup=lambda i: found if i == LINKED else None)
+        item = session.items[self.other["id"]]
+        self.assertTrue(session.link(item, f"https://open.spotify.com/track/{LINKED}?si=x"))
+        decision_line = [t for t, _ in detail_lines(session, item)][-2]
+        self.assertEqual(decision_line, "↗ your link: Kilo - Cockpit (Original Mix) (Cockpit EP · 2009 · 4:00)")
+
+    def test_play_plays_the_pasted_link_instead_of_the_candidate(self):
+        session = ReviewSession(self.library, self.results, self.path, lookup=lambda i: self.linked())
+        item = session.items[self.other["id"]]
+        session.link(item, LINKED)
+        commands = []
+        handle("p", UiState(), session, Player(run=commands.append), screen=None)
+        self.assertIn(f"spotify:track:{LINKED}", commands[0][2])
+
+    def test_a_link_that_cannot_be_looked_up_is_still_saved_and_playable(self):
+        def offline(track_id):
+            raise OSError("no network")
+        session = ReviewSession(self.library, self.results, self.path, lookup=offline)
+        item = session.items[self.other["id"]]
+        self.assertTrue(session.link(item, LINKED))
+        self.assertEqual(session.spotify_to_play(item).id, LINKED)
+        self.assertIn(f"open.spotify.com/track/{LINKED}", [t for t, _ in detail_lines(session, item)][-2])
