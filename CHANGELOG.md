@@ -39,6 +39,12 @@ scheme and releases are occasional snapshots rather than a product line.
   AppleScript on the Mac) and every decision saved to `data/overrides.csv` as it is made.
   `make apply` pushes the decisions to Spotify. A pasted Spotify link shows the title, artist and
   album it points at, and `p` then plays that track, so a hand-picked version can be checked.
+- `make archive-matched` moves the files of tracks already on Spotify out of Music's media folder
+  into `ARCHIVE_DIR` (default `~/Music/mp3-on-spotify`, keeping `Artist/Album/file`) and removes
+  those tracks from the Music library. It is a dry run unless `CONFIRM=yes`; the Music library is
+  backed up first, every move is recorded in a manifest, and `make restore-archived` moves the files
+  back. Afterwards `make export` refuses to replace the snapshot, since one without the archived
+  tracks would make the next sync drop them from the Spotify playlists.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

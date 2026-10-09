@@ -102,6 +102,15 @@ what goes into each. Once everything sits in its folder, drop the prefixes:
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 sync PLAYLIST_NAMES=plain
 ```
 
+Once tracks are on Spotify, their mp3s can leave the Music library. This is a dry run that lists
+every file in `reports/archive-plan.csv`; add `CONFIRM=yes` to back up the Music library, move the
+files into `~/Music/mp3-on-spotify` and remove the tracks from Music. `make restore-archived` moves
+them back.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 archive-matched
+```
+
 `make help` lists every target.
 
 ## Tests

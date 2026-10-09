@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import secrets
 import sys
+import time
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -243,6 +244,76 @@ def review(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _archive_manifest(settings: Settings):
+    from .archive import Manifest
+
+    return Manifest([settings.data_dir / "archive-manifest.csv", settings.archive_dir / "manifest.csv"])
+
+
+def _steps(started: float):
+    def show(stage: str, done: int, total: int) -> None:
+        if done % 100 and done != total:
+            return
+        elapsed = time.monotonic() - started
+        left = elapsed / done * (total - done) if done else 0
+        print(f"{stage}: {done}/{total}" + (f", about {left / 60:.0f} min left" if left >= 60 else ""),
+              flush=True)
+    return show
+
+
+def archive_matched(settings: Settings, args: argparse.Namespace) -> int:
+    from .archive import backup_library, move_files, music_locations, plan_archive, remove_from_music, write_plan
+
+    library = load_library(settings.library_path)
+    results = load_matches(settings.matches_path)
+    manifest = _archive_manifest(settings)
+    print("Reading where Music keeps each file...", flush=True)
+    entries, problems = plan_archive(library, results, music_locations(), settings.media_root,
+                                     settings.archive_dir, manifest.archived())
+    plan_path = settings.reports_dir / "archive-plan.csv"
+    write_plan(entries, plan_path)
+    size = sum(e.size for e in entries) / 1e9
+    print(f"{len(entries)} files on Spotify, {size:.1f} GB, to move into {settings.archive_dir}")
+    if manifest.archived():
+        print(f"{len(manifest.archived())} were archived by an earlier run")
+    for problem in problems:
+        print(f"  skipped: {problem}")
+    print(f"Full list: {plan_path}")
+    if not args.confirm:
+        print("\nDry run: nothing was moved. To move the files and remove the tracks from Music:\n"
+              "  make archive-matched CONFIRM=yes")
+        return 0
+
+    backup = backup_library(settings.music_library, settings.archive_dir)
+    print(f"Music library backed up to {backup}")
+    started = time.monotonic()
+    problems = move_files(entries, manifest, _steps(started))
+    print(f"Removing {len(manifest.archived())} tracks from Music; the time left shows after the first 100.",
+          flush=True)
+    problems += remove_from_music(manifest, progress=_steps(time.monotonic()))
+    for problem in problems:
+        print(f"  note: {problem}")
+    print(f"\nDone: {len(manifest.archived())} files in {settings.archive_dir}, removed from Music.\n"
+          f"Manifest: {settings.data_dir / 'archive-manifest.csv'} (a copy is next to the files).\n"
+          "Undo the move with: make restore-archived")
+    return 0
+
+
+def restore_archived(settings: Settings, args: argparse.Namespace) -> int:
+    from .archive import restore
+
+    manifest = _archive_manifest(settings)
+    if not manifest.entries:
+        print("nothing has been archived")
+        return 0
+    problems = restore(manifest, _steps(time.monotonic()))
+    for problem in problems:
+        print(f"  note: {problem}")
+    print(f"Files are back in place. To get the tracks back into Music with their play counts, quit "
+          f"Music and restore the library backup in {settings.archive_dir}.")
+    return 0
+
+
 COMMANDS = {
     "summary": (summary, "print the library snapshot as a folder tree with counts"),
     "validate": (validate, "check the snapshot is complete and consistent"),
@@ -253,6 +324,8 @@ COMMANDS = {
     "plan": (plan, "write reports/plan.md: the playlists and folders sync would produce"),
     "sync": (push, "create or update the playlists in Spotify"),
     "review": (review, "browse, play and decide the open tracks in a terminal UI (host only)"),
+    "archive-matched": (archive_matched, "move the files of tracks on Spotify into the archive (host only)"),
+    "restore-archived": (restore_archived, "move archived files back where they were (host only)"),
 }
 
 
@@ -267,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
                                   help="match only the first N library tracks")
     parsers["match"].add_argument("--track", action="append",
                                   help="match only this Music persistent ID (repeatable)")
+    parsers["archive-matched"].add_argument("--confirm", action="store_true",
+                                            help="really move the files (default: dry run)")
     args = parser.parse_args(argv)
     handler, _ = COMMANDS[args.command]
     try:

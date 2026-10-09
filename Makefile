@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept plan sync review apply test
+.PHONY: help build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept plan sync review apply archive-matched restore-archived test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -16,6 +16,10 @@ build: ## Build the Docker image
 	$(COMPOSE) build
 
 export: ## Snapshot the Music.app library to data/library.json (host, via osascript)
+	@if [ -f $(DATA)/archive-manifest.csv ] && [ -z "$(FORCE)" ]; then \
+		echo "Tracks were archived and removed from Music; a new snapshot without them would make the"; \
+		echo "next sync drop them from every Spotify playlist. Keeping data/library.json (FORCE=1 overrides)."; \
+		exit 1; fi
 	@mkdir -p $(DATA)
 	osascript -l JavaScript $(ROOT)/exporter/export_library.js > $(DATA)/library.json.tmp
 	mv $(DATA)/library.json.tmp $(DATA)/library.json
@@ -62,6 +66,12 @@ review: ## Browse, play and decide the open tracks in a terminal UI (on the Mac:
 apply: ## Push decisions from data/overrides.csv to Spotify (track lookups and sync, no search quota)
 	$(RUN) match
 	$(COMPOSE) run --rm $(NAMES) app sync
+
+archive-matched: ## Dry run: list the files of tracks on Spotify to archive (CONFIRM=yes moves them, host only)
+	@cd $(ROOT) && python3 -m music2spotify archive-matched $(if $(filter yes,$(CONFIRM)),--confirm)
+
+restore-archived: ## Move archived files back to where Music had them (host only)
+	@cd $(ROOT) && python3 -m music2spotify restore-archived
 
 test: build ## Run the unit and end-to-end tests in Docker
 	$(COMPOSE) run --rm --entrypoint python app -m unittest discover -s tests -t . -v

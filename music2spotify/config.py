@@ -22,6 +22,9 @@ class Settings:
     market: str
     name_style: str
     root_folder: str
+    archive_dir: Path
+    media_root: Path
+    music_library: Path
 
     @property
     def library_path(self) -> Path:
@@ -67,4 +70,9 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         # "path" until the playlists sit in their Spotify folders, then "plain".
         name_style=env.get("PLAYLIST_NAMES", "path"),
         root_folder=env.get("ROOT_FOLDER", "mp3-collection"),
+        # Host paths for `make archive-matched`: where Music keeps its files and
+        # database, and where the files of tracks already on Spotify are moved.
+        archive_dir=Path(env.get("ARCHIVE_DIR", "~/Music/mp3-on-spotify")).expanduser(),
+        media_root=Path(env.get("MUSIC_MEDIA_DIR", "~/Music/Music/Media/Music")).expanduser(),
+        music_library=Path(env.get("MUSIC_LIBRARY", "~/Music/Music/Music Library.musiclibrary")).expanduser(),
     )
