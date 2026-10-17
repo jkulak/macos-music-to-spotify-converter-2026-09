@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched archive-rest restore-archived youtube-match youtube-auth youtube-sync test
+.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched archive-rest restore-archived collection youtube-match youtube-auth youtube-sync test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -85,6 +85,9 @@ archive-rest: ## Dry run: every other music file, by why it may go; run youtube-
 
 restore-archived: ## Move archived files back to where Music had them (host only)
 	@cd $(ROOT) && python3 -m music2spotify restore-archived
+
+collection: ## Write every track, one line each, to COLLECTION_FILE (default ~/Music/music-collection.tsv)
+	@cd $(ROOT) && set -a && { [ ! -f .env ] || . ./.env; } && set +a && python3 -m music2spotify collection
 
 youtube-match: ## Look for the favourites Spotify lacks (FAVOURITE_PLAYS+) on YouTube Music; writes reports/youtube.md
 	$(RUN) youtube-match

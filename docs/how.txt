@@ -24,7 +24,7 @@ Also
                             youtube-auth once, youtube-sync fills a playlist.
   make archive-rest         After youtube-sync: dry run of moving every mp3 out
                             of Music, by why it may go; CONFIRM=yes does it.
+  make collection           Every track, one line each, in a text file to grep.
   make help                 Every target, make summary among them.
 
-reports/ lists what is missing from Spotify (report.md, not-found.csv);
-data/ holds the snapshot, the matches and your decisions, so back it up.
+reports/ lists what Spotify lacks; data/ holds your decisions, so back it up.

@@ -69,6 +69,11 @@ scheme and releases are occasional snapshots rather than a product line.
   kept apart under `_no-copy-anywhere/`. Non-music tracks stay. The manifest now records the reason;
   manifests written before read as "on Spotify". The "Removing N tracks" line counts only what the
   run itself moved, not everything archived so far.
+- `make collection` writes the whole collection to one text file (`COLLECTION_FILE`, default
+  `~/Music/music-collection.tsv`), one tab-separated line per track: tags, plays, stars, dates,
+  playlists, what became of the track, its Spotify and YouTube links and its place in the archive.
+  It lives outside the archive and the repo, so a grep can still answer what the collection held
+  once the mp3s are gone.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.

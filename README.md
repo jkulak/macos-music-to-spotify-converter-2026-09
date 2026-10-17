@@ -172,6 +172,17 @@ the files, with the same backup, manifest and `make restore-archived` as above.
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 archive-rest
 ```
 
+Before the archive is emptied, keep a list of what the collection held. `make collection` writes
+every track of the snapshot, one tab-separated line each, to `~/Music/music-collection.tsv`
+(`COLLECTION_FILE`): artist, title, album, year, genre, plays, stars, dates, the playlists it was
+on, what became of it (on Spotify, on YouTube, let go, no copy anywhere, not music), the Spotify
+and YouTube links and where the file went in the archive. `grep -i` finds a track by any of it,
+and Numbers opens it as a table. It sits outside the archive and the repo, so it outlives both.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 collection
+```
+
 `make help` lists every target.
 
 ## Tests

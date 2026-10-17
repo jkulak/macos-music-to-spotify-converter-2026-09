@@ -418,6 +418,22 @@ def restore_archived(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def collection(settings: Settings, args: argparse.Namespace) -> int:
+    from .collection import collection_rows, write_collection
+
+    library = load_library(settings.library_path)
+    found = load_found(settings.youtube_matches_path) if settings.youtube_matches_path.exists() else {}
+    manifest = _archive_manifest(settings)
+    archived = {k: e for k, e in manifest.entries.items() if k in manifest.archived()}
+    rows = collection_rows(library, load_matches(settings.matches_path), load_overrides(settings.overrides_path),
+                           found, PlaylistState(settings.youtube_state_path).added, archived,
+                           settings.archive_dir)
+    write_collection(rows, settings.collection_file)
+    print(f"{len(rows)} tracks, one per line, in {settings.collection_file}")
+    print(f"Search it with: grep -i 'artist or title' '{settings.collection_file}'")
+    return 0
+
+
 def _favourites(settings: Settings) -> Selection:
     library = load_library(settings.library_path)
     return select_favourites(library, load_matches(settings.matches_path),
@@ -528,6 +544,7 @@ COMMANDS = {
     "archive-matched": (archive_matched, "move the files of tracks on Spotify into the archive (host only)"),
     "archive-rest": (archive_rest, "move every other music file into the archive (host only)"),
     "restore-archived": (restore_archived, "move archived files back where they were (host only)"),
+    "collection": (collection, "write the whole collection to a text file, one line per track (host only)"),
     "youtube-auth": (youtube_auth, "save the YouTube Music login youtube-sync writes with"),
     "youtube-match": (youtube_match, "look for the favourites Spotify lacks on YouTube Music"),
     "youtube-sync": (youtube_sync, "add the YouTube picks to the private playlist"),
