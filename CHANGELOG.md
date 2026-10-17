@@ -43,6 +43,17 @@ scheme and releases are occasional snapshots rather than a product line.
 - `make accept-all` takes every uncertain and other-version proposal without review, leaving any
   decision already made alone; `UNDO=yes` removes exactly the overrides it wrote. Overrides are now
   always written to a side file and moved into place, whoever writes them.
+- `make youtube-match` looks for the favourites Spotify lacks in the exact version (played
+  `FAVOURITE_PLAYS` times or more and not found, marked "not on Spotify", or taken without review)
+  on YouTube Music: anonymous searches, songs first, then videos, scored with the Spotify matching.
+  The exact recording is the only pick; otherwise the two closest plausible results are kept, so
+  choosing happens by ear rather than by hand. Searches are cached; `reports/youtube.md` and
+  `reports/youtube.csv` list the picks and what was not found. `make youtube-auth` saves the
+  YouTube Music login once (pasted browser request headers, owner-readable only), and
+  `make youtube-sync` adds the picks to one private playlist, most played first, never twice and
+  never putting back a video removed by hand.
+- First third-party dependency: ytmusicapi 1.12.3 (MIT), pinned in `requirements.txt` and
+  installed in the Docker image only. The parts that run on the Mac still need nothing but Python.
 - `make how` prints the whole flow on half a page: five steps, the make target behind each, and the
   few other targets used day to day.
 - `make archive-matched` moves the files of tracks already on Spotify out of Music's media folder

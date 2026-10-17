@@ -10,7 +10,8 @@ report.
 1. `make export` reads the library straight from Music.app with JXA (`osascript`) and writes
    `data/library.json`. This is the only step that runs on the host, because Music.app is only
    reachable through Apple events.
-2. Everything else runs in Docker on the Python standard library — no third-party packages.
+2. Everything else runs in Docker on the Python standard library, plus one pinned package in the
+   image: [ytmusicapi](https://github.com/sigma67/ytmusicapi), for the YouTube playlist only.
 
 `data/` and `reports/` hold personal listening history and tokens; both are gitignored.
 
@@ -118,6 +119,36 @@ what goes into each. Once everything sits in its folder, drop the prefixes:
 
 ```bash
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 sync PLAYLIST_NAMES=plain
+```
+
+Favourites Spotify does not have in the exact version can go to a private YouTube Music playlist
+instead: every music track played `FAVOURITE_PLAYS` times or more (default 10) that was not found,
+was marked "not on Spotify" in review, or was taken without review (`accept-all`). Tracks linked or
+taken by hand are on Spotify as they should be, and tracks left out stay out. The search is
+anonymous, songs (the released audio) first, then videos, and every result is scored like a Spotify
+candidate. The exact recording is the only pick for its track; otherwise the two closest plausible
+results are both kept, to pick by ear later. About 3 seconds per track, cached and resumable;
+`reports/youtube.md` and `reports/youtube.csv` list the picks and the tracks with nothing found.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 youtube-match
+```
+
+Writing the playlist needs your YouTube Music login, once. The command explains the steps: open
+music.youtube.com logged in, copy the request headers of a "browse" request from the browser's
+developer tools, paste them. They are saved to `data/youtube-auth.json` (`YOUTUBE_AUTH_FILE`),
+readable by you only; logging out in the browser revokes them.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 youtube-auth
+```
+
+Then fill the playlist (`YOUTUBE_PLAYLIST`, private), most played first. It is created once and
+remembered in `data/youtube-state.json`; running it again adds only what is new, and a video removed
+from the playlist by hand is not added back.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 youtube-sync
 ```
 
 Once tracks are on Spotify, their mp3s can leave the Music library. This is a dry run that lists

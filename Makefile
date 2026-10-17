@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched restore-archived test
+.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched restore-archived youtube-match youtube-auth youtube-sync test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -82,6 +82,15 @@ archive-matched: ## Dry run: list the files of tracks on Spotify to archive (CON
 
 restore-archived: ## Move archived files back to where Music had them (host only)
 	@cd $(ROOT) && python3 -m music2spotify restore-archived
+
+youtube-match: ## Look for the favourites Spotify lacks (FAVOURITE_PLAYS+) on YouTube Music; writes reports/youtube.md
+	$(RUN) youtube-match
+
+youtube-auth: ## Save your YouTube Music login for youtube-sync, once (paste browser request headers)
+	$(RUN) youtube-auth
+
+youtube-sync: ## Add the YouTube picks to your private playlist, most played first, never twice
+	$(RUN) youtube-sync
 
 test: build ## Run the unit and end-to-end tests in Docker
 	$(COMPOSE) run --rm --entrypoint python app -m unittest discover -s tests -t . -v

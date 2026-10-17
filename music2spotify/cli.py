@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import secrets
 import sys
 import time
@@ -29,6 +30,23 @@ from .plan import NAME_STYLES, build_plan, folder_count, render_plan
 from .reports import read_decisions, write_reports
 from .spotify import RateLimited, SpotifyClient, SpotifyError, TokenStore
 from .sync import SyncState, sync
+from .youtube import (
+    BATCH,
+    MAX_QUERIES,
+    PlaylistState,
+    Searcher,
+    Selection,
+    YouTubeError,
+    find_all,
+    load_found,
+    playlist_order,
+    save_found,
+    select_favourites,
+    signed_in_client,
+    sync_playlist,
+    write_youtube_reports,
+    youtube_queries,
+)
 
 
 class UsageError(Exception):
@@ -279,9 +297,9 @@ def _archive_manifest(settings: Settings):
     return Manifest([settings.data_dir / "archive-manifest.csv", settings.archive_dir / "manifest.csv"])
 
 
-def _steps(started: float):
+def _steps(started: float, every: int = 100):
     def show(stage: str, done: int, total: int) -> None:
-        if done % 100 and done != total:
+        if done % every and done != total:
             return
         elapsed = time.monotonic() - started
         left = elapsed / done * (total - done) if done else 0
@@ -343,6 +361,102 @@ def restore_archived(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def _favourites(settings: Settings) -> Selection:
+    library = load_library(settings.library_path)
+    return select_favourites(library, load_matches(settings.matches_path),
+                             load_overrides(settings.overrides_path), settings.favourite_plays)
+
+
+YOUTUBE_HEADERS_HOWTO = """\
+To add videos to your playlist this needs your YouTube Music login, once:
+
+  1. In a browser, open https://music.youtube.com and make sure you are logged in.
+  2. Open the developer tools, Network tab, and click Library on the page.
+  3. Pick a POST request named "browse" and copy its request headers
+     (Firefox: right click > Copy Value > Copy Request Headers;
+      Chrome: Headers > Request Headers > Raw, then select and copy).
+  4. Paste them below, press Enter, then Ctrl-D.
+
+The headers are a login: they are saved in {path}, readable by you only,
+never printed and never committed. Logging out in the browser revokes them.
+"""
+
+
+def youtube_auth(settings: Settings, args: argparse.Namespace) -> int:
+    from ytmusicapi import setup  # in the Docker image only
+
+    path = settings.youtube_auth_file
+    print(YOUTUBE_HEADERS_HOWTO.format(path=path))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        setup(filepath=str(path))
+    except Exception as error:  # the message names missing headers, never their values
+        raise UsageError(f"the headers were not usable: {error}") from error
+    os.chmod(path, 0o600)
+    try:
+        account = signed_in_client(path).get_account_info()
+    except Exception as error:
+        raise UsageError(f"YouTube did not accept the login ({type(error).__name__}); copy the headers "
+                         "of a request made while logged in and run make youtube-auth again") from error
+    print(f"\nLogged in to YouTube Music as {account.get('accountName') or 'an unnamed account'}. "
+          "Add the picks with: make youtube-sync")
+    return 0
+
+
+def youtube_match(settings: Settings, args: argparse.Namespace) -> int:
+    everything = selection = _favourites(settings)
+    previous = {}
+    if args.limit:
+        if settings.youtube_matches_path.exists():
+            previous = load_found(settings.youtube_matches_path)
+        selection = Selection(selection.wanted[: args.limit], selection.let_go)
+    cache = JsonLinesCache(settings.youtube_cache_path)
+    fresh = sum(1 for w in selection.wanted
+                if not all(f"songs:{q}" in cache for q in youtube_queries(w.track)[:1]))
+    print(f"{len(selection.wanted)} favourites (played {settings.favourite_plays} times or more) not on "
+          f"Spotify in the exact version; {fresh} not searched before, up to {2 * MAX_QUERIES} searches "
+          f"each: about {max(1, round(fresh * 3 / 60))} min.", flush=True)
+    searcher = Searcher(cache)
+    found = find_all(selection, searcher, _steps(time.monotonic(), every=10))
+    found = {**previous, **found}
+    save_found(settings.youtube_matches_path, found)
+    # Reports cover every track searched so far, by this run or an earlier one.
+    selection = Selection([w for w in everything.wanted if w.track.id in found], everything.let_go)
+    paths = write_youtube_reports(selection, found, settings.reports_dir, settings.favourite_plays)
+    statuses = Counter(found[w.track.id].status for w in selection.wanted)
+    print(f"\n{sum(statuses.values())} tracks: {statuses['exact']} found as the same recording, "
+          f"{statuses['similar']} with close results, {statuses['nothing']} with nothing close enough; "
+          f"{len(playlist_order(selection, found))} videos for the playlist. "
+          f"{searcher.requests_made} searches on YouTube Music.")
+    print("Reports: " + ", ".join(str(p) for p in paths))
+    print("Next: make youtube-auth once, then make youtube-sync")
+    return 0
+
+
+def youtube_sync(settings: Settings, args: argparse.Namespace) -> int:
+    order = playlist_order(_favourites(settings), load_found(settings.youtube_matches_path))
+    state = PlaylistState(settings.youtube_state_path)
+    client = signed_in_client(settings.youtube_auth_file)
+    print(f"{len(order)} videos for the private playlist \"{state.name or settings.youtube_playlist}\"; "
+          f"a few seconds for every {BATCH}.", flush=True)
+    try:
+        outcome = sync_playlist(order, client, state, settings.youtube_playlist,
+                                _steps(time.monotonic(), every=BATCH))
+    except YouTubeError:
+        raise
+    except Exception as error:
+        raise YouTubeError(f"YouTube refused ({type(error).__name__}: {error}). What went in so far is "
+                           "remembered: run make youtube-sync again, or make youtube-auth first if the "
+                           "login has expired") from error
+    print(("Playlist created. " if outcome.created else "")
+          + f"{len(outcome.added)} videos added, {outcome.already} were there already"
+          + (f", {len(outcome.failed)} YouTube would not add" if outcome.failed else "") + ".")
+    for video_id in outcome.failed:
+        print(f"  not added: https://music.youtube.com/watch?v={video_id}")
+    print(f"Playlist: {state.url}")
+    return 0
+
+
 COMMANDS = {
     "summary": (summary, "print the library snapshot as a folder tree with counts"),
     "validate": (validate, "check the snapshot is complete and consistent"),
@@ -356,6 +470,9 @@ COMMANDS = {
     "review": (review, "browse, play and decide the open tracks in a terminal UI (host only)"),
     "archive-matched": (archive_matched, "move the files of tracks on Spotify into the archive (host only)"),
     "restore-archived": (restore_archived, "move archived files back where they were (host only)"),
+    "youtube-auth": (youtube_auth, "save the YouTube Music login youtube-sync writes with"),
+    "youtube-match": (youtube_match, "look for the favourites Spotify lacks on YouTube Music"),
+    "youtube-sync": (youtube_sync, "add the YouTube picks to the private playlist"),
 }
 
 
@@ -372,12 +489,15 @@ def main(argv: list[str] | None = None) -> int:
                                   help="match only this Music persistent ID (repeatable)")
     parsers["accept-all"].add_argument("--undo", action="store_true",
                                        help="remove the overrides accept-all wrote, and only those")
+    parsers["youtube-match"].add_argument("--limit", type=int,
+                                          help="search only the N most played tracks (a quick check)")
     parsers["archive-matched"].add_argument("--confirm", action="store_true",
                                             help="really move the files (default: dry run)")
     args = parser.parse_args(argv)
     handler, _ = COMMANDS[args.command]
     try:
         return handler(load_settings(), args)
-    except (LibraryError, UsageError, SpotifyError, FileNotFoundError, ValueError) as error:
+    except (LibraryError, UsageError, SpotifyError, YouTubeError, FileNotFoundError,
+            ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
