@@ -89,6 +89,8 @@ class FakeYouTube:
         return playlist_id
 
     def get_playlist(self, playlistId, limit=100):  # noqa: N803
+        if not self.playlists[playlistId]:
+            raise KeyError("contents")  # what ytmusicapi 1.12.3 does on the page of an empty playlist
         return {"id": playlistId, "tracks": [{"videoId": v} for v in self.playlists[playlistId]]}
 
     def add_playlist_items(self, playlistId, videoIds, duplicates=False):  # noqa: N803
@@ -325,6 +327,15 @@ class SyncPlaylistTest(unittest.TestCase):
         self.assertEqual(len(self.fake.created), 1)
         self.assertEqual(self.fake.playlists["PL1"], ["a", "b", "c"])
         self.assertEqual((outcome.created, outcome.added, outcome.already), (False, ["c"], 2))
+
+    def test_a_playlist_left_empty_by_a_run_that_stopped_is_filled_by_the_next_one(self):
+        state = PlaylistState(self.state_path)
+        state.playlist_id, state.name = "PL7", "Favourites"
+        state.save()
+        self.fake.playlists["PL7"] = []
+        outcome = self.sync(["a", "b"])
+        self.assertEqual((outcome.created, outcome.added), (False, ["a", "b"]))
+        self.assertEqual(self.fake.playlists["PL7"], ["a", "b"])
 
     def test_a_video_removed_from_the_playlist_by_hand_is_not_added_back(self):
         self.sync(["a", "b"])

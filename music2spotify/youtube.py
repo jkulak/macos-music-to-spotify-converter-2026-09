@@ -491,6 +491,17 @@ def _succeeded(response) -> bool:
     return isinstance(response, dict) and "SUCCEEDED" in str(response.get("status", ""))
 
 
+def _videos_in(client: PlaylistClient, playlist_id: str) -> set[str]:
+    try:
+        tracks = client.get_playlist(playlist_id, limit=None).get("tracks") or []
+    except KeyError:
+        # ytmusicapi cannot read the page of an empty playlist, the state of every new one. Taking
+        # it as empty is safe either way: additions skip duplicates and state.added keeps out what
+        # was removed by hand.
+        return set()
+    return {t.get("videoId") for t in tracks}
+
+
 def sync_playlist(video_ids: list[str], client: PlaylistClient, state: PlaylistState, name: str,
                   progress: Callable[[str, int, int], None]) -> SyncOutcome:
     created = False
@@ -502,8 +513,7 @@ def sync_playlist(video_ids: list[str], client: PlaylistClient, state: PlaylistS
         # Saved before anything is added, so a run that stops halfway never makes a second one.
         state.playlist_id, state.name, created = playlist_id, name, True
         state.save()
-    present = {t.get("videoId") for t in client.get_playlist(state.playlist_id, limit=None).get("tracks") or []}
-    done = present | set(state.added)
+    done = _videos_in(client, state.playlist_id) | set(state.added)
     todo = [v for v in video_ids if v not in done]
     added, failed = [], []
     for start in range(0, len(todo), BATCH):
