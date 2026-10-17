@@ -22,8 +22,8 @@ touches the playlists it created.
 Also
   make youtube-match        Find the favourites Spotify lacks on YouTube Music;
                             youtube-auth once, youtube-sync fills a playlist.
-  make archive-matched      Dry run of moving the mp3s now on Spotify out of
-                            Music; CONFIRM=yes does it.
+  make archive-rest         After youtube-sync: dry run of moving every mp3 out
+                            of Music, by why it may go; CONFIRM=yes does it.
   make help                 Every target, make summary among them.
 
 reports/ lists what is missing from Spotify (report.md, not-found.csv);
