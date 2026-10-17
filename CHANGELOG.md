@@ -51,7 +51,8 @@ scheme and releases are occasional snapshots rather than a product line.
   `reports/youtube.csv` list the picks and what was not found. `make youtube-auth` saves the
   YouTube Music login once (pasted browser request headers, owner-readable only), and
   `make youtube-sync` adds the picks to one private playlist, most played first, never twice and
-  never putting back a video removed by hand.
+  never putting back a video removed by hand. A playlist still empty, as a new one is, counts as
+  empty even though ytmusicapi cannot read its page.
 - First third-party dependency: ytmusicapi 1.12.3 (MIT), pinned in `requirements.txt` and
   installed in the Docker image only. The parts that run on the Mac still need nothing but Python.
 - `make how` prints the whole flow on half a page: five steps, the make target behind each, and the
