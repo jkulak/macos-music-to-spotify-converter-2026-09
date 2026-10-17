@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept plan sync ui tui review apply archive-matched restore-archived test
+.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched restore-archived test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -55,6 +55,9 @@ report: ## Rewrite reports/ from the saved matches
 accept: ## Apply accept/spotify columns from reports/*.csv as overrides, then match again
 	$(RUN) accept
 	$(RUN) match
+
+accept-all: ## Take every yellow and violet proposal without review; your decisions stay (UNDO=yes takes them back)
+	$(RUN) accept-all $(if $(filter yes,$(UNDO)),--undo)
 
 plan: ## Write reports/plan.md: playlists and folders a sync would produce (no writes)
 	$(COMPOSE) run --rm $(NAMES) app plan

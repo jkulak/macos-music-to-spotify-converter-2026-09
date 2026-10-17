@@ -25,6 +25,7 @@ class Settings:
     archive_dir: Path
     media_root: Path
     music_library: Path
+    favourite_plays: int
 
     @property
     def library_path(self) -> Path:
@@ -75,4 +76,6 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         archive_dir=Path(env.get("ARCHIVE_DIR", "~/Music/mp3-on-spotify")).expanduser(),
         media_root=Path(env.get("MUSIC_MEDIA_DIR", "~/Music/Music/Media/Music")).expanduser(),
         music_library=Path(env.get("MUSIC_LIBRARY", "~/Music/Music/Music Library.musiclibrary")).expanduser(),
+        # Played this often or more: worth keeping on YouTube when Spotify lacks the exact version.
+        favourite_plays=int(env.get("FAVOURITE_PLAYS", "10")),
     )

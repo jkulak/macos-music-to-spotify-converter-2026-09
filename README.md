@@ -73,6 +73,15 @@ marks the song as not on Spotify, `x` leaves it out, `l` takes a pasted Spotify 
 `p` / `m` play the Spotify and the Music version, space pauses, `o` opens the track or a search in
 Spotify, `t` searches YouTube Music in the browser, `/` filters, `?` lists the keys. Every decision
 is saved to `data/overrides.csv` at once.
+
+Or skip the review and take every yellow (probably the same) and violet (another version) proposal
+as it is. Decisions already made stay; the overrides it writes carry the note
+`accepted without review`, and `UNDO=yes` removes exactly those:
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 accept-all
+```
+
 Then push the decisions to Spotify (track lookups and sync, no search quota):
 
 ```bash

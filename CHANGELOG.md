@@ -40,6 +40,9 @@ scheme and releases are occasional snapshots rather than a product line.
   `make apply` pushes the decisions to Spotify. A pasted Spotify link shows the title, artist and
   album it points at, and `p` then plays that track, so a hand-picked version can be checked.
   `t` opens a YouTube Music search for the track in the browser, for when Spotify has nothing.
+- `make accept-all` takes every uncertain and other-version proposal without review, leaving any
+  decision already made alone; `UNDO=yes` removes exactly the overrides it wrote. Overrides are now
+  always written to a side file and moved into place, whoever writes them.
 - `make how` prints the whole flow on half a page: five steps, the make target behind each, and the
   few other targets used day to day.
 - `make archive-matched` moves the files of tracks already on Spotify out of Music's media folder
