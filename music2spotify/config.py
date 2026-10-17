@@ -28,6 +28,7 @@ class Settings:
     favourite_plays: int
     youtube_auth_file: Path
     youtube_playlist: str
+    collection_file: Path
 
     @property
     def library_path(self) -> Path:
@@ -96,4 +97,6 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         # The YouTube login made by `make youtube-auth`: browser headers, as good as a password.
         youtube_auth_file=Path(env.get("YOUTUBE_AUTH_FILE") or data_dir / "youtube-auth.json"),
         youtube_playlist=env.get("YOUTUBE_PLAYLIST", "mp3-collection · favourites"),
+        # Outside the archive and the repo, so emptying the one or deleting the other keeps it.
+        collection_file=Path(env.get("COLLECTION_FILE", "~/Music/music-collection.tsv")).expanduser(),
     )
