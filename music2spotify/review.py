@@ -137,11 +137,7 @@ class ReviewSession:
         self._save()
 
     def _save(self) -> None:
-        # Written to a side file and moved into place, so a crash or Ctrl-C in the
-        # middle of a write never leaves a half-written overrides file.
-        tmp = self.overrides_path.with_suffix(".csv.tmp")
-        save_overrides(tmp, self.overrides)
-        os.replace(tmp, self.overrides_path)
+        save_overrides(self.overrides_path, self.overrides)
 
 
 # --- text helpers ----------------------------------------------------------------

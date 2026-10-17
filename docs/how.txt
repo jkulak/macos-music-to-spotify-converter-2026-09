@@ -9,10 +9,10 @@ touches the playlists it created.
   1. make export            Snapshot the Music library into data/library.json.
   2. make match-until-done  Find every track on Spotify (log in once first
                             with make auth); sleeps out the daily quota.
-  3. make ui                Decide what matching could not. p / m play the
-                            Spotify and the Music version; y takes it, n says
-                            not on Spotify, x leaves it out, l takes a pasted
-                            link, ? lists every key.
+  3. make ui                Decide what matching could not: p / m play both
+                            versions, y takes, n not on Spotify, x leaves out,
+                            t searches YouTube, ? lists the keys. Or take all
+                            proposals unseen with make accept-all.
   4. make apply             Push the decisions, create or update the
                             playlists (make plan previews them, no writes).
   5. make sync PLAYLIST_NAMES=plain

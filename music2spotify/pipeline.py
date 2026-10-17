@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
 import time
 from collections.abc import Callable, Iterable
@@ -13,9 +14,11 @@ from pathlib import Path
 from .albums import AlbumGroup, AlbumHit, album_groups, rank_albums
 from .library import Library, Track
 from .matching import (
+    ALTERNATIVE,
     MATCHED,
     NOT_FOUND,
     SKIPPED,
+    UNCERTAIN,
     Candidate,
     best_assessment,
     search_queries,
@@ -169,13 +172,35 @@ def load_overrides(path: Path) -> dict[str, Override]:
 
 
 def save_overrides(path: Path, overrides: dict[str, Override]) -> None:
+    # Written to a side file and moved into place, so a crash or Ctrl-C in the
+    # middle of a write never leaves a half-written overrides file.
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as out:
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="") as out:
         writer = csv.DictWriter(out, OVERRIDE_FIELDS)
         writer.writeheader()
         for override in overrides.values():
             writer.writerow({"track_id": override.track_id, "spotify": override.spotify,
                              "note": override.note})
+    os.replace(tmp, path)
+
+
+UNREVIEWED = "accepted without review"
+
+
+def accept_open_proposals(library: Library, results: dict[str, MatchResult],
+                          overrides: dict[str, Override]) -> list[Override]:
+    """Take the proposed Spotify track for every music track still probably the
+    same or another version, unless a decision was already made for it. The
+    note marks them, so they can be told apart from reviewed ones and undone."""
+    accepted = []
+    for track_id, result in results.items():
+        track = library.tracks.get(track_id)
+        if (track is None or not track.is_music or track_id in overrides
+                or result.status not in (UNCERTAIN, ALTERNATIVE) or result.candidate is None):
+            continue
+        accepted.append(Override(track_id, result.candidate.id, UNREVIEWED))
+    return accepted
 
 
 # --- results ------------------------------------------------------------------

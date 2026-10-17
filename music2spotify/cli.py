@@ -13,9 +13,12 @@ from . import auth
 from .config import Settings, load_settings
 from .insights import build_insights
 from .library import Library, LibraryError, load_library
+from .matching import ALTERNATIVE, UNCERTAIN
 from .pipeline import (
+    UNREVIEWED,
     JsonLinesCache,
     Sources,
+    accept_open_proposals,
     load_matches,
     load_overrides,
     match_library,
@@ -172,6 +175,32 @@ def accept(settings: Settings, args: argparse.Namespace) -> int:
     return 0
 
 
+def accept_all(settings: Settings, args: argparse.Namespace) -> int:
+    overrides = load_overrides(settings.overrides_path)
+    if args.undo:
+        mine = [k for k, o in overrides.items() if o.note == UNREVIEWED]
+        for track_id in mine:
+            del overrides[track_id]
+        save_overrides(settings.overrides_path, overrides)
+        print(f"{len(mine)} proposals accepted without review taken back; decisions made in review "
+              "are untouched. The next make apply puts them back among the open ones.")
+        return 0
+    library = load_library(settings.library_path)
+    results = load_matches(settings.matches_path)
+    accepted = accept_open_proposals(library, results, overrides)
+    for override in accepted:
+        overrides[override.track_id] = override
+    save_overrides(settings.overrides_path, overrides)
+    kinds = Counter(results[o.track_id].status for o in accepted)
+    favourites = sum(1 for o in accepted if library.tracks[o.track_id].plays >= settings.favourite_plays)
+    print(f"{len(accepted)} proposals accepted without review: {kinds[UNCERTAIN]} probably the same, "
+          f"{kinds[ALTERNATIVE]} another version; {favourites} of them played "
+          f"{settings.favourite_plays} times or more.")
+    if accepted:
+        print("Push them to Spotify with: make apply\nTake them back with: make accept-all UNDO=yes")
+    return 0
+
+
 def _plan(settings: Settings):
     if settings.name_style not in NAME_STYLES:
         raise UsageError(f"PLAYLIST_NAMES must be one of {', '.join(NAME_STYLES)}")
@@ -321,6 +350,7 @@ COMMANDS = {
     "match": (match, "find every library track on Spotify and write the reports"),
     "report": (report, "rewrite the reports from the saved matches"),
     "accept": (accept, "move decisions from review.csv and not-found.csv into overrides"),
+    "accept-all": (accept_all, "take every uncertain and other-version proposal without review"),
     "plan": (plan, "write reports/plan.md: the playlists and folders sync would produce"),
     "sync": (push, "create or update the playlists in Spotify"),
     "review": (review, "browse, play and decide the open tracks in a terminal UI (host only)"),
@@ -340,6 +370,8 @@ def main(argv: list[str] | None = None) -> int:
                                   help="match only the first N library tracks")
     parsers["match"].add_argument("--track", action="append",
                                   help="match only this Music persistent ID (repeatable)")
+    parsers["accept-all"].add_argument("--undo", action="store_true",
+                                       help="remove the overrides accept-all wrote, and only those")
     parsers["archive-matched"].add_argument("--confirm", action="store_true",
                                             help="really move the files (default: dry run)")
     args = parser.parse_args(argv)
