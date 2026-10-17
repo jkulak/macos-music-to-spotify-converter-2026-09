@@ -246,7 +246,8 @@ def detail_lines(session: ReviewSession, item: Item) -> list[tuple[str, str]]:
 
 
 HINTS = [("y", "take"), ("n", "not on Spotify"), ("x", "leave out"), ("l", "link"), ("u", "undo"),
-         ("p", "▶ Spotify"), ("m", "▶ Music"), ("␣", "pause"), ("o", "open"), ("/", "filter")]
+         ("p", "▶ Spotify"), ("m", "▶ Music"), ("␣", "pause"), ("o", "open"), ("t", "YouTube"),
+         ("/", "filter")]
 ALWAYS = [("?", "help"), ("q", "quit")]  # shown on the right however narrow the window
 
 HELP = [
@@ -261,6 +262,7 @@ HELP = [
     ("m", "play your file in Music"),
     ("space", "pause whatever is playing"),
     ("o", "open the track in Spotify, or search for it"),
+    ("t", "search YouTube Music for the track, in the browser"),
     ("/", "filter by artist, title or album · Esc clears"),
     ("q", "quit · decisions are already saved; then run make apply"),
 ]
@@ -519,6 +521,9 @@ def handle(key, ui: UiState, session: ReviewSession, player: Player, screen: Scr
             player.open_track(item.result.candidate.id)
         else:
             player.open_search(f"{item.track.artist} {item.track.name}")
+    elif key == "t":
+        player.open_youtube(f"{item.track.artist} {item.track.name}")
+        ui.message = "YouTube Music search opened in the browser"
     return True
 
 

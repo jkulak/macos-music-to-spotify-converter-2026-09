@@ -1,6 +1,7 @@
 import curses
 import tempfile
 import unittest
+import urllib.parse
 from pathlib import Path
 
 from music2spotify.library import parse_library
@@ -9,6 +10,8 @@ from music2spotify.pipeline import NONE, SKIP, MatchResult, Override, load_overr
 from music2spotify.players import Player
 from music2spotify.review import (
     DECIDED,
+    HELP,
+    HINTS,
     NOT_FOUND_TAB,
     TO_DECIDE,
     ReviewSession,
@@ -132,6 +135,23 @@ class KeysTest(SessionTest):
     def test_o_searches_spotify_when_nothing_was_found(self):
         _, commands = self.press("o", tab=NOT_FOUND_TAB)
         self.assertTrue(commands[0][1].startswith("spotify:search:"))
+
+    def test_t_searches_youtube_music_on_every_list_and_changes_nothing_else(self):
+        self.session.leave_out(self.session.items_in(TO_DECIDE)[0])  # so Decided is not empty
+        before = dict(self.session.overrides)
+        for tab in (TO_DECIDE, NOT_FOUND_TAB, DECIDED):
+            ui, commands = self.press("t", tab=tab)
+            item = self.session.items_in(tab)[0]
+            self.assertEqual(len(commands), 1, tab)
+            self.assertEqual(commands[0][0], "open", tab)
+            self.assertTrue(commands[0][1].startswith("https://music.youtube.com/search?q="), tab)
+            self.assertIn(urllib.parse.quote_plus(item.track.name), commands[0][1], tab)
+            self.assertEqual(self.session.overrides, before, tab)
+            self.assertEqual((ui.tab, ui.cursor, ui.query), (tab, [0, 0, 0], ""), tab)
+
+    def test_the_footer_and_the_help_name_the_youtube_key(self):
+        self.assertIn(("t", "YouTube"), HINTS)
+        self.assertIn("t", [key for key, _ in HELP])
 
     def test_moving_stays_inside_the_list_and_tabs_switch(self):
         ui, _ = self.press(curses.KEY_UP, "j", "j", "j")

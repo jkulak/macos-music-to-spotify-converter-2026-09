@@ -39,6 +39,7 @@ scheme and releases are occasional snapshots rather than a product line.
   Music, via AppleScript on the Mac) and every decision saved to `data/overrides.csv` as it is made.
   `make apply` pushes the decisions to Spotify. A pasted Spotify link shows the title, artist and
   album it points at, and `p` then plays that track, so a hand-picked version can be checked.
+  `t` opens a YouTube Music search for the track in the browser, for when Spotify has nothing.
 - `make how` prints the whole flow on half a page: five steps, the make target behind each, and the
   few other targets used day to day.
 - `make archive-matched` moves the files of tracks already on Spotify out of Music's media folder

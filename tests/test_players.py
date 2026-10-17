@@ -45,6 +45,11 @@ class PlayerTest(unittest.TestCase):
         self.player.open_search("Gęślą Jaźń & Kilo")
         self.assertEqual(self.commands, [["open", "spotify:search:G%C4%99%C5%9Bl%C4%85%20Ja%C5%BA%C5%84%20%26%20Kilo"]])
 
+    def test_a_youtube_music_search_opens_in_the_browser_with_the_text_encoded(self):
+        self.player.open_youtube("Gęślą Jaźń & Kilo #1 / ?")
+        self.assertEqual(self.commands, [[
+            "open", "https://music.youtube.com/search?q=G%C4%99%C5%9Bl%C4%85+Ja%C5%BA%C5%84+%26+Kilo+%231+%2F+%3F"]])
+
 
 if __name__ == "__main__":
     unittest.main()
