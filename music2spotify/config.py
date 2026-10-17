@@ -26,6 +26,8 @@ class Settings:
     media_root: Path
     music_library: Path
     favourite_plays: int
+    youtube_auth_file: Path
+    youtube_playlist: str
 
     @property
     def library_path(self) -> Path:
@@ -51,10 +53,23 @@ class Settings:
     def state_path(self) -> Path:
         return self.data_dir / "spotify-state.json"
 
+    @property
+    def youtube_cache_path(self) -> Path:
+        return self.data_dir / "youtube-cache.jsonl"
+
+    @property
+    def youtube_matches_path(self) -> Path:
+        return self.data_dir / "youtube-matches.json"
+
+    @property
+    def youtube_state_path(self) -> Path:
+        return self.data_dir / "youtube-state.json"
+
 
 def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
+    data_dir = Path(env.get("DATA_DIR", "data"))
     return Settings(
-        data_dir=Path(env.get("DATA_DIR", "data")),
+        data_dir=data_dir,
         reports_dir=Path(env.get("REPORTS_DIR", "reports")),
         client_id=env.get("SPOTIFY_CLIENT_ID", "").strip(),
         redirect_uri=env.get("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback"),
@@ -78,4 +93,7 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         music_library=Path(env.get("MUSIC_LIBRARY", "~/Music/Music/Music Library.musiclibrary")).expanduser(),
         # Played this often or more: worth keeping on YouTube when Spotify lacks the exact version.
         favourite_plays=int(env.get("FAVOURITE_PLAYS", "10")),
+        # The YouTube login made by `make youtube-auth`: browser headers, as good as a password.
+        youtube_auth_file=Path(env.get("YOUTUBE_AUTH_FILE") or data_dir / "youtube-auth.json"),
+        youtube_playlist=env.get("YOUTUBE_PLAYLIST", "mp3-collection · favourites"),
     )
