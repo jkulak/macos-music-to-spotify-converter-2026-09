@@ -309,7 +309,7 @@ def _steps(started: float, every: int = 100):
 
 
 def archive_matched(settings: Settings, args: argparse.Namespace) -> int:
-    from .archive import backup_library, move_files, music_locations, plan_archive, remove_from_music, write_plan
+    from .archive import music_locations, plan_archive, write_plan
 
     library = load_library(settings.library_path)
     results = load_matches(settings.matches_path)
@@ -330,13 +330,18 @@ def archive_matched(settings: Settings, args: argparse.Namespace) -> int:
         print("\nDry run: nothing was moved. To move the files and remove the tracks from Music:\n"
               "  make archive-matched CONFIRM=yes")
         return 0
+    return _archive_for_real(settings, entries, manifest)
+
+
+def _archive_for_real(settings: Settings, entries, manifest) -> int:
+    from .archive import MOVED, backup_library, move_files, remove_from_music
 
     backup = backup_library(settings.music_library, settings.archive_dir)
     print(f"Music library backed up to {backup}")
     started = time.monotonic()
     problems = move_files(entries, manifest, _steps(started))
-    print(f"Removing {len(manifest.archived())} tracks from Music; the time left shows after the first 100.",
-          flush=True)
+    waiting = sum(1 for e in manifest.entries.values() if e.state == MOVED)
+    print(f"Removing {waiting} tracks from Music; the time left shows after the first 100.", flush=True)
     problems += remove_from_music(manifest, progress=_steps(time.monotonic()))
     for problem in problems:
         print(f"  note: {problem}")
@@ -344,6 +349,57 @@ def archive_matched(settings: Settings, args: argparse.Namespace) -> int:
           f"Manifest: {settings.data_dir / 'archive-manifest.csv'} (a copy is next to the files).\n"
           "Undo the move with: make restore-archived")
     return 0
+
+
+def _on_youtube(settings: Settings) -> tuple[set[str], int]:
+    """Tracks with a pick in the YouTube playlist, and how many have picks still waiting for
+    youtube-sync."""
+    if not settings.youtube_matches_path.exists():
+        return set(), 0
+    added = set(PlaylistState(settings.youtube_state_path).added)
+    found = load_found(settings.youtube_matches_path)
+    on_youtube = {k for k, f in found.items() if any(p.video_id in added for p in f.picks)}
+    waiting = sum(1 for k, f in found.items() if f.picks and k not in on_youtube)
+    return on_youtube, waiting
+
+
+def archive_rest(settings: Settings, args: argparse.Namespace) -> int:
+    from .archive import NO_COPY, NO_COPY_FOLDER, REASONS, music_locations, plan_moves, rest_reasons, write_plan
+
+    library = load_library(settings.library_path)
+    results = load_matches(settings.matches_path)
+    on_youtube, waiting = _on_youtube(settings)
+    reasons = rest_reasons(library, results, load_overrides(settings.overrides_path), on_youtube,
+                           settings.favourite_plays)
+    manifest = _archive_manifest(settings)
+    print("Reading where Music keeps each file...", flush=True)
+    entries, problems = plan_moves(library, reasons, results, music_locations(), settings.media_root,
+                                   settings.archive_dir, manifest.archived())
+    plan_path = settings.reports_dir / "archive-rest-plan.csv"
+    write_plan(entries, plan_path)
+    print(f"{len(entries)} music files, {sum(e.size for e in entries) / 1e9:.1f} GB, to move into "
+          f"{settings.archive_dir}:")
+    for why in REASONS:
+        some = [e for e in entries if e.why == why]
+        print(f"  {why:<17} {len(some):>5}  {sum(e.size for e in some) / 1e9:5.1f} GB")
+    if any(e.why == NO_COPY for e in entries):
+        print(f"\"{NO_COPY}\" means played {settings.favourite_plays} times or more and on neither "
+              f"Spotify nor YouTube; those go into {settings.archive_dir / NO_COPY_FOLDER}, apart.")
+    if waiting:
+        print(f"{waiting} of them have YouTube picks not in the playlist yet: run make youtube-sync "
+              "first, or they count as having no copy anywhere.")
+    kept = sum(1 for t in library.tracks.values() if not t.is_music)
+    print(f"{kept} tracks that are not music (voice memos, audiobooks...) stay in Music.")
+    if manifest.archived():
+        print(f"{len(manifest.archived())} were archived by an earlier run")
+    for problem in problems:
+        print(f"  skipped: {problem}")
+    print(f"Full list: {plan_path}")
+    if not args.confirm:
+        print("\nDry run: nothing was moved. To move the files and remove the tracks from Music:\n"
+              "  make archive-rest CONFIRM=yes")
+        return 0
+    return _archive_for_real(settings, entries, manifest)
 
 
 def restore_archived(settings: Settings, args: argparse.Namespace) -> int:
@@ -469,6 +525,7 @@ COMMANDS = {
     "sync": (push, "create or update the playlists in Spotify"),
     "review": (review, "browse, play and decide the open tracks in a terminal UI (host only)"),
     "archive-matched": (archive_matched, "move the files of tracks on Spotify into the archive (host only)"),
+    "archive-rest": (archive_rest, "move every other music file into the archive (host only)"),
     "restore-archived": (restore_archived, "move archived files back where they were (host only)"),
     "youtube-auth": (youtube_auth, "save the YouTube Music login youtube-sync writes with"),
     "youtube-match": (youtube_match, "look for the favourites Spotify lacks on YouTube Music"),
@@ -491,8 +548,9 @@ def main(argv: list[str] | None = None) -> int:
                                        help="remove the overrides accept-all wrote, and only those")
     parsers["youtube-match"].add_argument("--limit", type=int,
                                           help="search only the N most played tracks (a quick check)")
-    parsers["archive-matched"].add_argument("--confirm", action="store_true",
-                                            help="really move the files (default: dry run)")
+    for command in ("archive-matched", "archive-rest"):
+        parsers[command].add_argument("--confirm", action="store_true",
+                                      help="really move the files (default: dry run)")
     args = parser.parse_args(argv)
     handler, _ = COMMANDS[args.command]
     try:

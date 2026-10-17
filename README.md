@@ -160,6 +160,18 @@ them back.
 make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 archive-matched
 ```
 
+The rest of the music follows with `make archive-rest`, after `make youtube-sync`. Every remaining
+music file goes into the same archive, and the dry run counts them by why they may go: on Spotify,
+on YouTube (a pick of theirs is in the playlist), let go (played fewer than `FAVOURITE_PLAYS` times,
+or left out in review) and no copy anywhere (a favourite on neither). The last kind is filed under
+`_no-copy-anywhere/` in the archive, apart, so it can be looked through before the archive is
+emptied. Voice memos, audiobooks and the other non-music tracks stay in Music. `CONFIRM=yes` moves
+the files, with the same backup, manifest and `make restore-archived` as above.
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 archive-rest
+```
+
 `make help` lists every target.
 
 ## Tests

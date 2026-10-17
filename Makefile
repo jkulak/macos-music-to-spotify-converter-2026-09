@@ -7,7 +7,7 @@ RUN := $(COMPOSE) run --rm app
 NAMES := $(if $(PLAYLIST_NAMES),-e PLAYLIST_NAMES=$(PLAYLIST_NAMES))
 DATA := $(ROOT)/data
 
-.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched restore-archived youtube-match youtube-auth youtube-sync test
+.PHONY: help how build export smoke-export summary auth match match-until-done migrate-until-done rematch report accept accept-all plan sync ui tui review apply archive-matched archive-rest restore-archived youtube-match youtube-auth youtube-sync test
 
 help: ## List the targets
 	@grep -E '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -79,6 +79,9 @@ apply: ## Push decisions from data/overrides.csv to Spotify (track lookups and s
 
 archive-matched: ## Dry run: list the files of tracks on Spotify to archive (CONFIRM=yes moves them, host only)
 	@cd $(ROOT) && python3 -m music2spotify archive-matched $(if $(filter yes,$(CONFIRM)),--confirm)
+
+archive-rest: ## Dry run: every other music file, by why it may go; run youtube-sync first (CONFIRM=yes moves, host only)
+	@cd $(ROOT) && python3 -m music2spotify archive-rest $(if $(filter yes,$(CONFIRM)),--confirm)
 
 restore-archived: ## Move archived files back to where Music had them (host only)
 	@cd $(ROOT) && python3 -m music2spotify restore-archived

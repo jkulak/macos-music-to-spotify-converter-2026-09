@@ -1,4 +1,4 @@
-"""Move the files of tracks that are on Spotify out of the Music library.
+"""Move music files out of the Music library: first the tracks on Spotify, then the rest.
 
 Nothing is deleted. Files are moved into an archive folder (keeping
 Artist/Album/file), every move is written to a manifest the moment it happens,
@@ -23,10 +23,20 @@ from pathlib import Path
 
 from .library import Library
 from .matching import MATCHED
-from .pipeline import MatchResult
+from .pipeline import SKIP, MatchResult, Override
 
-MANIFEST_FIELDS = ["track_id", "source", "target", "size", "spotify", "label", "state"]
+MANIFEST_FIELDS = ["track_id", "source", "target", "size", "spotify", "label", "state", "why"]
 MOVED, REMOVED = "moved", "removed from Music"
+
+# Why a file may go. Only the last one means the mp3 is the only copy of a favourite.
+ON_SPOTIFY = "on Spotify"
+ON_YOUTUBE = "on YouTube"
+LET_GO = "let go"
+NO_COPY = "no copy anywhere"
+REASONS = (ON_SPOTIFY, ON_YOUTUBE, LET_GO, NO_COPY)
+# Kept apart inside the archive, so emptying the archive folder by folder never takes these
+# along with the files that have a copy elsewhere.
+NO_COPY_FOLDER = "_no-copy-anywhere"
 
 Progress = Callable[[str, int, int], None]
 
@@ -40,19 +50,57 @@ class ArchiveEntry:
     spotify: str
     label: str
     state: str = ""
+    why: str = ""
+
+
+def matched_reasons(results: dict[str, MatchResult]) -> dict[str, str]:
+    return {track_id: ON_SPOTIFY for track_id, result in results.items() if result.status == MATCHED}
+
+
+def rest_reasons(library: Library, results: dict[str, MatchResult], overrides: dict[str, Override],
+                 on_youtube: set[str], favourite_plays: int) -> dict[str, str]:
+    """Why each music track may leave Music. Non-music (voice memos, audiobooks and the like)
+    is not this repo's business and never gets a reason.
+
+    A favourite counts as on YouTube only once a pick of it is in the playlist, so running this
+    before youtube-sync files it as having no copy anywhere rather than letting it go quietly.
+    """
+    reasons = {}
+    for track_id, track in library.tracks.items():
+        if not track.is_music:
+            continue
+        result, override = results.get(track_id), overrides.get(track_id)
+        if result is not None and result.status == MATCHED:
+            reasons[track_id] = ON_SPOTIFY
+        elif track_id in on_youtube:
+            reasons[track_id] = ON_YOUTUBE
+        elif (override is not None and override.spotify == SKIP) or track.plays < favourite_plays:
+            reasons[track_id] = LET_GO
+        else:
+            reasons[track_id] = NO_COPY
+    return reasons
 
 
 def plan_archive(library: Library, results: dict[str, MatchResult], locations: dict[str, str | None],
                  media_root: Path, archive_root: Path,
                  archived: Iterable[str] = ()) -> tuple[list[ArchiveEntry], list[str]]:
+    """The files of tracks on Spotify."""
+    return plan_moves(library, matched_reasons(results), results, locations, media_root, archive_root,
+                      archived)
+
+
+def plan_moves(library: Library, reasons: dict[str, str], results: dict[str, MatchResult],
+               locations: dict[str, str | None], media_root: Path, archive_root: Path,
+               archived: Iterable[str] = ()) -> tuple[list[ArchiveEntry], list[str]]:
     """Which files would move where, and the problems that keep a track out.
     Tracks already archived by an earlier run are skipped, not reported."""
     archived = set(archived)
     entries, problems = [], []
-    for track_id, result in results.items():
-        if result.status != MATCHED or track_id not in library.tracks or track_id in archived:
+    for track_id, why in reasons.items():
+        if track_id not in library.tracks or track_id in archived:
             continue
         track = library.tracks[track_id]
+        result = results.get(track_id)
         label = f"{track.artist} — {track.name}"
         location = locations.get(track_id)
         if not location:
@@ -63,12 +111,13 @@ def plan_archive(library: Library, results: dict[str, MatchResult], locations: d
             relative = source.relative_to(media_root)
         except ValueError:
             relative = Path("_outside-media") / source.name
-        target = archive_root / relative
+        target = archive_root / (NO_COPY_FOLDER if why == NO_COPY else "") / relative
         if not source.exists():
             problems.append(f"{label}: file not found at {source}")
             continue
-        entries.append(ArchiveEntry(track_id, source, target, source.stat().st_size,
-                                    result.uri or "", label))
+        spotify = (result.uri or "") if why == ON_SPOTIFY and result is not None else ""
+        entries.append(ArchiveEntry(track_id, source, target, source.stat().st_size, spotify, label,
+                                    why=why))
     entries.sort(key=lambda e: str(e.target).casefold())
     return entries, problems
 
@@ -84,7 +133,8 @@ def write_plan(entries: list[ArchiveEntry], path: Path) -> None:
 
 def _row(entry: ArchiveEntry) -> dict:
     return {"track_id": entry.track_id, "source": str(entry.source), "target": str(entry.target),
-            "size": entry.size, "spotify": entry.spotify, "label": entry.label, "state": entry.state}
+            "size": entry.size, "spotify": entry.spotify, "label": entry.label, "state": entry.state,
+            "why": entry.why}
 
 
 class Manifest:
@@ -99,7 +149,9 @@ class Manifest:
                 for row in csv.DictReader(rows):
                     self.entries[row["track_id"]] = ArchiveEntry(
                         row["track_id"], Path(row["source"]), Path(row["target"]), int(row["size"] or 0),
-                        row["spotify"], row["label"], row["state"])
+                        row["spotify"], row["label"], row["state"],
+                        # Manifests written before archive-rest have no reason: they were all on Spotify.
+                        row.get("why") or ON_SPOTIFY)
 
     def archived(self) -> set[str]:
         return {k for k, e in self.entries.items() if e.state in (MOVED, REMOVED)}

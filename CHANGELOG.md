@@ -62,6 +62,12 @@ scheme and releases are occasional snapshots rather than a product line.
   backed up first, every move is recorded in a manifest, and `make restore-archived` moves the files
   back. Afterwards `make export` refuses to replace the snapshot, since one without the archived
   tracks would make the next sync drop them from the Spotify playlists.
+- `make archive-rest` does the same for every other music file, so the mp3s can go altogether. The
+  dry run counts them by why they may go: on Spotify, on YouTube (a pick is in the playlist), let go
+  (fewer than `FAVOURITE_PLAYS` plays, or left out in review) and no copy anywhere; the last kind is
+  kept apart under `_no-copy-anywhere/`. Non-music tracks stay. The manifest now records the reason;
+  manifests written before read as "on Spotify". The "Removing N tracks" line counts only what the
+  run itself moved, not everything archived so far.
 - Reports in `reports/`: `report.md` with coverage and missing tracks per playlist,
   `not-found.csv`, `review.csv` and `skipped.csv`. `make accept` turns `y`/`n` answers in
   `review.csv` and links pasted into `not-found.csv` into `data/overrides.csv`.
