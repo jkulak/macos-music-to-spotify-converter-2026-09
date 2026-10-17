@@ -1,0 +1,29 @@
+How it works
+============
+
+Music.app is read once, every track is looked up on Spotify, and the
+playlists are written to your account. Every step is safe to run again:
+searches are cached, decisions live in data/overrides.csv, and a sync only
+touches the playlists it created.
+
+  1. make export            Snapshot the Music library into data/library.json.
+  2. make match-until-done  Find every track on Spotify (log in once first
+                            with make auth); sleeps out the daily quota.
+  3. make ui                Decide what matching could not. p / m play the
+                            Spotify and the Music version; y takes it, n says
+                            not on Spotify, x leaves it out, l takes a pasted
+                            link, ? lists every key.
+  4. make apply             Push the decisions, create or update the
+                            playlists (make plan previews them, no writes).
+  5. make sync PLAYLIST_NAMES=plain
+                            Once the playlists sit in their Spotify folders,
+                            drop the folder path from their names.
+
+Also
+  make archive-matched      Dry run of moving the mp3s now on Spotify out of
+                            Music; CONFIRM=yes does it.
+  make summary              The library as a folder tree with counts.
+  make help                 Every target.
+
+reports/ lists what is missing from Spotify (report.md, not-found.csv);
+data/ holds the snapshot, the matches and your decisions, so back it up.

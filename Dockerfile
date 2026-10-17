@@ -8,5 +8,8 @@ WORKDIR /app
 COPY music2spotify ./music2spotify
 COPY tests ./tests
 COPY scripts ./scripts
+# The Makefile and docs/how.txt are checked against each other by the tests.
+COPY Makefile ./
+COPY docs ./docs
 
 ENTRYPOINT ["python", "-m", "music2spotify"]

@@ -14,6 +14,12 @@ report.
 
 `data/` and `reports/` hold personal listening history and tokens; both are gitignored.
 
+The short version of everything below, as the five steps and the target behind each:
+
+```bash
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 how
+```
+
 ## Setup
 
 ```bash
@@ -57,8 +63,10 @@ in Docker, because it plays both versions for comparison: the Spotify candidate 
 and your file in Music.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 review
+make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 ui
 ```
+
+`make tui` is the same target.
 
 Three lists (to decide, not found, decided), most played first. `y` takes the Spotify track, `n`
 marks the song as not on Spotify, `x` leaves it out, `l` takes a pasted Spotify link, `u` undoes;

@@ -224,12 +224,12 @@ def push(settings: Settings, args: argparse.Namespace) -> int:
 
 def review(settings: Settings, args: argparse.Namespace) -> int:
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        raise UsageError("review needs a terminal; run `make review` on the Mac, not in Docker")
+        raise UsageError("review needs a terminal; run `make ui` on the Mac, not in Docker")
     from .review import ReviewSession, run
 
     library = load_library(settings.library_path)
     cache = JsonLinesCache(settings.cache_path)
-    # Logged in (.env loaded by make review): pasted links get their title from Spotify.
+    # Logged in (.env loaded by make ui): pasted links get their title from Spotify.
     online = Sources(cache, _client(settings)) if settings.client_id and settings.token_path.exists() else None
     offline = Sources(cache)
     session = ReviewSession(library, load_matches(settings.matches_path), settings.overrides_path,
