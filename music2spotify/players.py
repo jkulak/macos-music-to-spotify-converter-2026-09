@@ -1,5 +1,5 @@
 """Play a track for comparison: the Spotify candidate in the Spotify app, the
-library file in Music.
+library file in Music; or look for it on Spotify or YouTube Music.
 
 Both apps take AppleScript commands, so this works from the host without any
 API scope; it does not work inside Docker, which has neither audio nor the apps.
@@ -65,3 +65,7 @@ class Player:
 
     def open_search(self, text: str) -> None:
         self.run(["open", "spotify:search:" + urllib.parse.quote(text)])
+
+    def open_youtube(self, text: str) -> None:
+        # In the browser: YouTube Music lists songs first, which is what a missing track needs.
+        self.run(["open", "https://music.youtube.com/search?" + urllib.parse.urlencode({"q": text})])

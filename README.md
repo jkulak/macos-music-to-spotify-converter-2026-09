@@ -71,7 +71,8 @@ make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 ui
 Three lists (to decide, not found, decided), most played first. `y` takes the Spotify track, `n`
 marks the song as not on Spotify, `x` leaves it out, `l` takes a pasted Spotify link, `u` undoes;
 `p` / `m` play the Spotify and the Music version, space pauses, `o` opens the track or a search in
-Spotify, `/` filters, `?` lists the keys. Every decision is saved to `data/overrides.csv` at once.
+Spotify, `t` searches YouTube Music in the browser, `/` filters, `?` lists the keys. Every decision
+is saved to `data/overrides.csv` at once.
 Then push the decisions to Spotify (track lookups and sync, no search quota):
 
 ```bash
