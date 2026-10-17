@@ -18,17 +18,17 @@ report.
 The short version of everything below, as the five steps and the target behind each:
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 how
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 how
 ```
 
 ## Setup
 
 ```bash
-cp /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09/.env.example /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09/.env
+cp ~/Developer/macos-music-to-spotify-converter-2026-09/.env.example ~/Developer/macos-music-to-spotify-converter-2026-09/.env
 ```
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 export
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 export
 ```
 
 Create an app at https://developer.spotify.com/dashboard (Web API, redirect URI
@@ -36,11 +36,11 @@ Create an app at https://developer.spotify.com/dashboard (Web API, redirect URI
 Development-mode apps need the owner to have Premium.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 auth
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 auth
 ```
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 match
 ```
 
 `match` writes `reports/report.md`, `reports/not-found.csv`, `reports/review.csv` and
@@ -53,7 +53,7 @@ one before any gets two. When the quota runs out, `match` saves what it has and 
 this keeps going by itself until everything has been searched (the Mac has to stay awake):
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 match-until-done
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 match-until-done
 ```
 
 `migrate-until-done` does the same and syncs the playlists after every run, so they fill up while
@@ -64,7 +64,7 @@ in Docker, because it plays both versions for comparison: the Spotify candidate 
 and your file in Music.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 ui
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 ui
 ```
 
 `make tui` is the same target.
@@ -80,20 +80,20 @@ as it is. Decisions already made stay; the overrides it writes carry the note
 `accepted without review`, and `UNDO=yes` removes exactly those:
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 accept-all
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 accept-all
 ```
 
 Then push the decisions to Spotify (track lookups and sync, no search quota):
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 apply
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 apply
 ```
 
 Alternatively, mark rows in `reports/review.csv` with `y` or `n` in `accept`, or paste a
 Spotify link into the `spotify` column of `reports/not-found.csv`, then:
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 accept
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 accept
 ```
 
 Decisions end up in `data/overrides.csv` (`track_id,spotify,note`; `spotify` is a track link,
@@ -106,11 +106,11 @@ in `music2spotify/insights.py`.
 Then create the playlists:
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 plan
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 plan
 ```
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 sync
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 sync
 ```
 
 The Web API cannot create folders, so playlists are named with their folder path
@@ -118,7 +118,7 @@ The Web API cannot create folders, so playlists are named with their folder path
 what goes into each. Once everything sits in its folder, drop the prefixes:
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 sync PLAYLIST_NAMES=plain
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 sync PLAYLIST_NAMES=plain
 ```
 
 Favourites Spotify does not have in the exact version can go to a private YouTube Music playlist
@@ -131,7 +131,7 @@ results are both kept, to pick by ear later. About 3 seconds per track, cached a
 `reports/youtube.md` and `reports/youtube.csv` list the picks and the tracks with nothing found.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 youtube-match
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 youtube-match
 ```
 
 Writing the playlist needs your YouTube Music login, once. The command explains the steps: open
@@ -140,7 +140,7 @@ developer tools, paste them. They are saved to `data/youtube-auth.json` (`YOUTUB
 readable by you only; logging out in the browser revokes them.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 youtube-auth
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 youtube-auth
 ```
 
 Then fill the playlist (`YOUTUBE_PLAYLIST`, private), most played first. It is created once and
@@ -148,7 +148,7 @@ remembered in `data/youtube-state.json`; running it again adds only what is new,
 from the playlist by hand is not added back.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 youtube-sync
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 youtube-sync
 ```
 
 Once tracks are on Spotify, their mp3s can leave the Music library. This is a dry run that lists
@@ -157,7 +157,7 @@ files into `~/Music/mp3-on-spotify` and remove the tracks from Music. `make rest
 them back.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 archive-matched
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 archive-matched
 ```
 
 The rest of the music follows with `make archive-rest`, after `make youtube-sync`. Every remaining
@@ -169,7 +169,7 @@ emptied. Voice memos, audiobooks and the other non-music tracks stay in Music. `
 the files, with the same backup, manifest and `make restore-archived` as above.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 archive-rest
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 archive-rest
 ```
 
 Before the archive is emptied, keep a list of what the collection held. `make collection` writes
@@ -180,7 +180,7 @@ and YouTube links and where the file went in the archive. `grep -i` finds a trac
 and Numbers opens it as a table. It sits outside the archive and the repo, so it outlives both.
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 collection
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 collection
 ```
 
 `make help` lists every target.
@@ -188,7 +188,7 @@ make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 collectio
 ## Tests
 
 ```bash
-make -C /Users/kuba/Developer/macos-music-to-spotify-converter-2026-09 test
+make -C ~/Developer/macos-music-to-spotify-converter-2026-09 test
 ```
 
 `make test` is the gate: the repository is local and single-user, and the exporter needs Music.app
