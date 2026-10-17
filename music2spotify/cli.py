@@ -351,16 +351,15 @@ def _archive_for_real(settings: Settings, entries, manifest) -> int:
     return 0
 
 
-def _on_youtube(settings: Settings) -> tuple[set[str], int]:
-    """Tracks with a pick in the YouTube playlist, and how many have picks still waiting for
+def _on_youtube(settings: Settings) -> tuple[set[str], set[str]]:
+    """Tracks with a pick in the YouTube playlist, and those whose picks still wait for
     youtube-sync."""
     if not settings.youtube_matches_path.exists():
-        return set(), 0
+        return set(), set()
     added = set(PlaylistState(settings.youtube_state_path).added)
     found = load_found(settings.youtube_matches_path)
     on_youtube = {k for k, f in found.items() if any(p.video_id in added for p in f.picks)}
-    waiting = sum(1 for k, f in found.items() if f.picks and k not in on_youtube)
-    return on_youtube, waiting
+    return on_youtube, {k for k, f in found.items() if f.picks and k not in on_youtube}
 
 
 def archive_rest(settings: Settings, args: argparse.Namespace) -> int:
@@ -368,7 +367,7 @@ def archive_rest(settings: Settings, args: argparse.Namespace) -> int:
 
     library = load_library(settings.library_path)
     results = load_matches(settings.matches_path)
-    on_youtube, waiting = _on_youtube(settings)
+    on_youtube, pending = _on_youtube(settings)
     reasons = rest_reasons(library, results, load_overrides(settings.overrides_path), on_youtube,
                            settings.favourite_plays)
     manifest = _archive_manifest(settings)
@@ -385,6 +384,8 @@ def archive_rest(settings: Settings, args: argparse.Namespace) -> int:
     if any(e.why == NO_COPY for e in entries):
         print(f"\"{NO_COPY}\" means played {settings.favourite_plays} times or more and on neither "
               f"Spotify nor YouTube; those go into {settings.archive_dir / NO_COPY_FOLDER}, apart.")
+    # Favourites taken as another version are on Spotify whatever the playlist holds.
+    waiting = sum(1 for e in entries if e.why == NO_COPY and e.track_id in pending)
     if waiting:
         print(f"{waiting} of them have YouTube picks not in the playlist yet: run make youtube-sync "
               "first, or they count as having no copy anywhere.")

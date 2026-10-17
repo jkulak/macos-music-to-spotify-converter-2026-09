@@ -31,7 +31,7 @@ from music2spotify.cli import main
 from music2spotify.library import parse_library
 from music2spotify.matching import MATCHED, NOT_FOUND, SKIPPED
 from music2spotify.pipeline import SKIP, MatchResult, Override, save_matches, save_overrides
-from music2spotify.youtube import Found, Pick, PlaylistState, save_found
+from music2spotify.youtube import Found, Pick, PlaylistState, load_found, save_found
 from tests.builders import candidate, snapshot, track
 
 
@@ -264,6 +264,14 @@ class ArchiveRestCommandTest(RestLibrary, unittest.TestCase):
         state.save()
         self.removed = []
 
+    def taken_as_another_version(self, raw):
+        """A favourite also searched on YouTube, then accepted on Spotify without review."""
+        self.results[raw["id"]] = MatchResult(raw["id"], MATCHED, candidate(raw["name"], ["Q"], id="2" * 22))
+        save_matches(self.data / "matches.json", self.results)
+        found = load_found(self.data / "youtube-matches.json")
+        found[raw["id"]] = Found(raw["id"], [Pick("v3", raw["name"], ["Kilo"], "", 1.0, "song", MATCHED, 0.9)])
+        save_found(self.data / "youtube-matches.json", found)
+
     def run_cli(self, *argv):
         def music(argv):
             self.removed += argv[5:]
@@ -294,6 +302,12 @@ class ArchiveRestCommandTest(RestLibrary, unittest.TestCase):
         self.assertTrue(all(Path(p).exists() for p in self.locations.values()))
         self.assertTrue((self.reports / "archive-rest-plan.csv").exists())
         self.assertEqual(self.removed, [])
+
+    def test_the_youtube_sync_hint_counts_only_files_that_would_otherwise_have_no_copy_anywhere(self):
+        self.taken_as_another_version(self.only_copy)
+        out = self.run_cli("archive-rest")
+        self.assertIn("on Spotify            2", out)
+        self.assertIn("1 of them have YouTube picks not in the playlist yet", out)
 
     def test_confirm_moves_every_music_file_out_of_music_and_restore_brings_them_back(self):
         out = self.run_cli("archive-rest", "--confirm")
